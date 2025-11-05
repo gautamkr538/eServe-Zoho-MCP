@@ -114,10 +114,10 @@ public class ZohoPayrollApiService {
 
         } catch (HttpClientErrorException e) {
             handleHttpClientError(e, "leave report");
-            throw e; // Won't reach here
+            throw e;
         } catch (HttpServerErrorException e) {
             handleHttpServerError(e, "leave report");
-            throw e; // Won't reach here
+            throw e;
         } catch (ResourceAccessException e) {
             log.error("Zoho API timeout while fetching leave report: {}", e.getMessage());
             throw ZohoApiException.timeout();
