@@ -97,4 +97,15 @@ public class LeaveRecordsResponse {
             private Map<String, BigDecimal> leavesByType; // LeaveType -> Days
         }
     }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class LeaveEntitlement {
+        private String leaveType;
+        private BigDecimal totalEntitled;
+        private BigDecimal used;
+        private BigDecimal remaining;
+    }
 }

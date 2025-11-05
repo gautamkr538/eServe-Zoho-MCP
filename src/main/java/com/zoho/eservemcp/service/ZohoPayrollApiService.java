@@ -1,5 +1,6 @@
 package com.zoho.eservemcp.service;
 
+import com.zoho.eservemcp.dto.response.ZohoLeaveBalanceResponse;
 import com.zoho.eservemcp.dto.response.ZohoLeaveReportResponse;
 import com.zoho.eservemcp.dto.response.ZohoPayrollReportResponse;
 import com.zoho.eservemcp.exception.DateValidationException;
@@ -243,5 +244,46 @@ public class ZohoPayrollApiService {
                 fromDate.format(DATE_FORMATTER),
                 toDate.format(DATE_FORMATTER)
         );
+    }
+
+    /**
+     * Fetch leave balance details for an employee.
+     * You may need to consult Zoho People API docs for the exact endpoint.
+     * Example endpoint: /api/leave/getLeaveBalance (pseudo)
+     */
+    public ZohoLeaveBalanceResponse fetchLeaveBalance(String userErecNo) {
+        log.info("Fetching leave balance for user: {}", userErecNo);
+        String url = String.format("%s/api/leave/getLeaveBalance?userErecNo=%s", baseUrl, userErecNo);
+        HttpHeaders headers = createHeaders();
+        try {
+            ResponseEntity<ZohoLeaveBalanceResponse> response = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), ZohoLeaveBalanceResponse.class); // <-- use the correct class here!
+            ZohoLeaveBalanceResponse responseBody = response.getBody();
+            // If you want: validate responseBody.getResponse().getStatus() == 0, etc
+            log.info("Successfully fetched leave balance for user: {}", userErecNo);
+            return responseBody;
+        } catch (Exception e) {
+            log.error("Failed to fetch leave balance", e);
+            throw new ZohoApiException("Failed to fetch leave balance", e);
+        }
+    }
+
+    public byte[] downloadPayslip(String userErecNo, String payPeriodId) {
+        log.info("Downloading payslip for user: {} period: {}", userErecNo, payPeriodId);
+        String url = String.format("%s/api/timesheet/downloadPayslip?userErecNo=%s&payPeriodId=%s", baseUrl, userErecNo, payPeriodId);
+        HttpHeaders headers = createHeaders();
+        try {
+            ResponseEntity<byte[]> response = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), byte[].class);
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                return response.getBody();
+            } else {
+                log.error("Payslip download failed, response code: {}", response.getStatusCode());
+                throw new ZohoApiException("Payslip download failed: HTTP " + response.getStatusCode());
+            }
+        } catch (Exception e) {
+            log.error("Exception downloading payslip: {}", e.getMessage(), e);
+            throw new ZohoApiException("Exception downloading payslip", e);
+        }
     }
 }

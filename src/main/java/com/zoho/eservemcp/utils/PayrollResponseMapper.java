@@ -1,13 +1,11 @@
 package com.zoho.eservemcp.utils;
 
-import com.zoho.eservemcp.dto.response.LeaveRecordsResponse;
-import com.zoho.eservemcp.dto.response.PayslipResponse;
-import com.zoho.eservemcp.dto.response.ZohoLeaveReportResponse;
-import com.zoho.eservemcp.dto.response.ZohoPayrollReportResponse;
+import com.zoho.eservemcp.dto.response.*;
 import com.zoho.eservemcp.entity.Employee;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -19,9 +17,7 @@ public class PayrollResponseMapper {
     /**
      * Map Zoho payroll response to MCP payslip response
      */
-    public PayslipResponse mapToPayslipResponse(
-            Employee employee,
-            ZohoPayrollReportResponse zohoResponse) {
+    public PayslipResponse mapToPayslipResponse(Employee employee, ZohoPayrollReportResponse zohoResponse) {
         
         if (zohoResponse == null || zohoResponse.getResponse() == null) {
             return PayslipResponse.builder()
@@ -50,8 +46,7 @@ public class PayrollResponseMapper {
             .build();
     }
     
-    private PayslipResponse.PayslipDetail mapToPayslipDetail(
-            ZohoPayrollReportResponse.PayrollResponse.PayrollRecord record) {
+    private PayslipResponse.PayslipDetail mapToPayslipDetail(ZohoPayrollReportResponse.PayrollResponse.PayrollRecord record) {
         
         PayslipResponse.PayslipDetail.EarningsBreakdown earnings = 
             PayslipResponse.PayslipDetail.EarningsBreakdown.builder()
@@ -87,8 +82,7 @@ public class PayrollResponseMapper {
             .build();
     }
     
-    private PayslipResponse.PayslipSummary calculatePayslipSummary(
-            List<PayslipResponse.PayslipDetail> details) {
+    private PayslipResponse.PayslipSummary calculatePayslipSummary(List<PayslipResponse.PayslipDetail> details) {
         
         return PayslipResponse.PayslipSummary.builder()
             .totalRecords(details.size())
@@ -118,10 +112,8 @@ public class PayrollResponseMapper {
     /**
      * Map Zoho leave response to MCP leave records response
      */
-    public LeaveRecordsResponse mapToLeaveRecordsResponse(
-            Employee employee, 
-            ZohoLeaveReportResponse zohoResponse) {
-        
+    public LeaveRecordsResponse mapToLeaveRecordsResponse(Employee employee, ZohoLeaveReportResponse zohoResponse) {
+
         if (zohoResponse == null || zohoResponse.getResponse() == null) {
             return LeaveRecordsResponse.builder()
                 .success(false)
@@ -149,8 +141,7 @@ public class PayrollResponseMapper {
             .build();
     }
     
-    private LeaveRecordsResponse.LeaveDetail mapToLeaveDetail(
-            ZohoLeaveReportResponse.LeaveResponse.LeaveRecord record) {
+    public LeaveRecordsResponse.LeaveDetail mapToLeaveDetail(ZohoLeaveReportResponse.LeaveResponse.LeaveRecord record) {
         
         String status = record.getStatus();
         
@@ -180,8 +171,7 @@ public class PayrollResponseMapper {
         return status.substring(0, 1).toUpperCase() + status.substring(1).toLowerCase();
     }
     
-    private LeaveRecordsResponse.LeaveSummary calculateLeaveSummary(
-            List<LeaveRecordsResponse.LeaveDetail> details) {
+    private LeaveRecordsResponse.LeaveSummary calculateLeaveSummary(List<LeaveRecordsResponse.LeaveDetail> details) {
         
         Map<String, BigDecimal> leavesByType = details.stream()
             .collect(Collectors.groupingBy(
@@ -207,5 +197,39 @@ public class PayrollResponseMapper {
                 .leavesByType(leavesByType)
                 .build())
             .build();
+    }
+    /**
+     * Map to LeaveSummaryResponse combining employee, entitlements and summary.
+     */
+    public LeaveSummaryResponse mapToLeaveSummary(Employee employee, List<LeaveRecordsResponse.LeaveEntitlement> entitlements, List<LeaveRecordsResponse.LeaveDetail> allLeaveDetails) {
+        // Provide an overall summary (approved leaves etc)
+        LeaveRecordsResponse.LeaveSummary summary = calculateLeaveSummary(allLeaveDetails);
+
+        return LeaveSummaryResponse.builder()
+                .employeeId(employee.getEmployeeId())
+                .employeeName(employee.getFullName())
+                .email(employee.getEmail())
+                .entitlements(entitlements)
+                .summary(summary)
+                .build();
+    }
+
+    /**
+     * Utility to map from Zoho entitlement API result to MCP LeaveEntitlement.
+     * (Assume zohoEntitlementResponse is parsed as List<ZohoEntitlementObject>.)
+     */
+    public List<LeaveRecordsResponse.LeaveEntitlement> mapEntitlementsFromZoho(List<ZohoEntitlementObject> zohoEntitlements) {
+        if (zohoEntitlements == null) return Collections.emptyList();
+        return zohoEntitlements.stream()
+                .map(e -> LeaveRecordsResponse.LeaveEntitlement.builder()
+                        .leaveType(e.getLeaveType())
+                        .totalEntitled(e.getTotalEntitled())
+                        .used(e.getUsed())
+                        .remaining(e.getBalance() != null ? e.getBalance() : (
+                                e.getTotalEntitled() != null && e.getUsed() != null
+                                        ? e.getTotalEntitled().subtract(e.getUsed())
+                                        : null))
+                        .build())
+                .collect(Collectors.toList());
     }
 }

@@ -48,7 +48,7 @@ public class ZohoTokenManager {
      * Initializes the refresh token from file at startup.
      * Throws error and halts app if not available.
      */
-    @PostConstruct
+//    @PostConstruct
     public void init() {
         Path path = Paths.get(refreshTokenFilePath);
         try {
