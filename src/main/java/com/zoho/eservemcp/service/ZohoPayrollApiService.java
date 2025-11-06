@@ -1,5 +1,6 @@
 package com.zoho.eservemcp.service;
 
+import com.zoho.eservemcp.dto.response.ZohoHolidaysResponse;
 import com.zoho.eservemcp.dto.response.ZohoLeaveBalanceResponse;
 import com.zoho.eservemcp.dto.response.ZohoLeaveReportResponse;
 import com.zoho.eservemcp.dto.response.ZohoPayrollReportResponse;
@@ -84,10 +85,7 @@ public class ZohoPayrollApiService {
     /**
      * Fetch leave records directly from Zoho API
      */
-    public ZohoLeaveReportResponse fetchLeaveReport(
-            String userErecNo,
-            LocalDate fromDate,
-            LocalDate toDate) {
+    public ZohoLeaveReportResponse fetchLeaveReport(String userErecNo, LocalDate fromDate, LocalDate toDate) {
 
         log.info("Fetching leave report for user: {} from {} to {}", userErecNo, fromDate, toDate);
 
@@ -97,12 +95,7 @@ public class ZohoPayrollApiService {
         HttpHeaders headers = createHeaders();
 
         try {
-            ResponseEntity<ZohoLeaveReportResponse> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    new HttpEntity<>(headers),
-                    ZohoLeaveReportResponse.class
-            );
+            ResponseEntity<ZohoLeaveReportResponse> response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), ZohoLeaveReportResponse.class);
 
             validateResponse(response, "leave report");
 
@@ -127,6 +120,7 @@ public class ZohoPayrollApiService {
         }
     }
 
+    // Validate date range constraints
     private void validateDateRange(LocalDate fromDate, LocalDate toDate) {
         if (fromDate.isAfter(toDate)) {
             throw DateValidationException.invalidRange(fromDate, toDate);
@@ -142,6 +136,7 @@ public class ZohoPayrollApiService {
         }
     }
 
+    // Validate that response body is not null
     private void validateResponse(ResponseEntity<?> response, String reportType) {
         if (response.getBody() == null) {
             log.error("Empty response received from Zoho API for {}", reportType);
@@ -149,6 +144,7 @@ public class ZohoPayrollApiService {
         }
     }
 
+    // Validate Zoho API response status codes
     private void validateZohoApiStatus(Object responseObject) {
         try {
             Integer status = null;
@@ -180,6 +176,7 @@ public class ZohoPayrollApiService {
         }
     }
 
+    // Handle 4xx errors
     private void handleHttpClientError(HttpClientErrorException e, String reportType) {
         HttpStatus statusCode = (HttpStatus) e.getStatusCode();
         String responseBody = e.getResponseBodyAsString();
@@ -205,6 +202,7 @@ public class ZohoPayrollApiService {
         }
     }
 
+    // Handle server-side errors from Zoho API
     private void handleHttpServerError(HttpServerErrorException e, String reportType) {
         HttpStatus statusCode = (HttpStatus) e.getStatusCode();
         String responseBody = e.getResponseBodyAsString();
@@ -217,6 +215,7 @@ public class ZohoPayrollApiService {
         );
     }
 
+    // Create HTTP headers with OAuth token
     private HttpHeaders createHeaders() {
         HttpHeaders headers = new HttpHeaders();
         String oauthToken = tokenManager.getValidAccessToken();
@@ -257,7 +256,7 @@ public class ZohoPayrollApiService {
         HttpHeaders headers = createHeaders();
         try {
             ResponseEntity<ZohoLeaveBalanceResponse> response = restTemplate.exchange(
-                    url, HttpMethod.GET, new HttpEntity<>(headers), ZohoLeaveBalanceResponse.class); // <-- use the correct class here!
+                    url, HttpMethod.GET, new HttpEntity<>(headers), ZohoLeaveBalanceResponse.class);
             ZohoLeaveBalanceResponse responseBody = response.getBody();
             // If you want: validate responseBody.getResponse().getStatus() == 0, etc
             log.info("Successfully fetched leave balance for user: {}", userErecNo);
@@ -268,6 +267,9 @@ public class ZohoPayrollApiService {
         }
     }
 
+    /**
+     * Download payslip PDF for an employee for a specific pay period.
+     */
     public byte[] downloadPayslip(String userErecNo, String payPeriodId) {
         log.info("Downloading payslip for user: {} period: {}", userErecNo, payPeriodId);
         String url = String.format("%s/api/timesheet/downloadPayslip?userErecNo=%s&payPeriodId=%s", baseUrl, userErecNo, payPeriodId);
@@ -284,6 +286,31 @@ public class ZohoPayrollApiService {
         } catch (Exception e) {
             log.error("Exception downloading payslip: {}", e.getMessage(), e);
             throw new ZohoApiException("Exception downloading payslip", e);
+        }
+    }
+
+    /**
+     * Fetch holidays from Zoho API
+     */
+    public ZohoHolidaysResponse fetchHolidays(
+            String location, String shift, String employee, boolean upcoming, String from, String to, String dateFormat) {
+
+        String url = String.format(
+                "%s/api/leave/v2/holidays/get?location=%s&shift=%s&employee=%s&upcoming=%s&from=%s&to=%s&dateFormat=%s",
+                baseUrl, location, shift, employee, upcoming, from, to, dateFormat);
+
+        HttpHeaders headers = createHeaders();
+        try {
+            ResponseEntity<ZohoHolidaysResponse> response = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), ZohoHolidaysResponse.class);
+            ZohoHolidaysResponse body = response.getBody();
+            if (body == null || body.getData() == null || body.getStatus() != 1) {
+                throw new ZohoApiException("Holidays API failure or empty result");
+            }
+            return body;
+        } catch (Exception ex) {
+            log.error("Failed fetching holidays from Zoho", ex);
+            throw new ZohoApiException("Failed to fetch holidays from Zoho", ex);
         }
     }
 }

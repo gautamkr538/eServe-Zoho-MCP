@@ -232,4 +232,23 @@ public class PayrollResponseMapper {
                         .build())
                 .collect(Collectors.toList());
     }
+
+    /**
+     * Map Zoho holidays response to MCP holiday response list
+     */
+    public List<HolidayResponse> mapToHolidayResponses(List<ZohoHolidaysResponse.Holiday> zohoHolidays) {
+        if (zohoHolidays == null) return Collections.emptyList();
+        return zohoHolidays.stream().map(z ->
+                HolidayResponse.builder()
+                        .name(z.getName())
+                        .date(z.getDate())
+                        .remarks(z.getRemarks())
+                        .locationName(z.getLocationName())
+                        .shiftName(z.getShiftName())
+                        .isRestrictedHoliday(Boolean.TRUE.equals(z.getIsRestrictedHoliday()))
+                        .isHalfday(Boolean.TRUE.equals(z.getIsHalfday()))
+                        .session(z.getSession())
+                        .build()
+        ).collect(Collectors.toList());
+    }
 }
