@@ -32,6 +32,6 @@ public class ZohoHolidaysResponse {
         private Boolean isHalfday;
         private String Name;
         private String LocationName;
-        private Integer Session;
+        private int Session;
     }
 }

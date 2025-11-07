@@ -5,10 +5,7 @@ import com.zoho.eservemcp.entity.Employee;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -240,14 +237,14 @@ public class PayrollResponseMapper {
         if (zohoHolidays == null) return Collections.emptyList();
         return zohoHolidays.stream().map(z ->
                 HolidayResponse.builder()
-                        .name(z.getName())
-                        .date(z.getDate())
-                        .remarks(z.getRemarks())
-                        .locationName(z.getLocationName())
-                        .shiftName(z.getShiftName())
+                        .name(z.getName() != null ? z.getName() : "")
+                        .date(z.getDate() != null ? z.getDate() : "")
+                        .remarks(z.getRemarks() != null ? z.getRemarks() : "")
+                        .locationName(z.getLocationName() != null ? z.getLocationName() : "")
+                        .shiftName(z.getShiftName() != null ? z.getShiftName() : "")
                         .isRestrictedHoliday(Boolean.TRUE.equals(z.getIsRestrictedHoliday()))
                         .isHalfday(Boolean.TRUE.equals(z.getIsHalfday()))
-                        .session(z.getSession())
+                        .session(Optional.of(z.getSession()).orElse(0))
                         .build()
         ).collect(Collectors.toList());
     }

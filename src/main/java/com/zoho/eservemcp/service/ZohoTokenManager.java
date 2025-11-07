@@ -9,9 +9,11 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
@@ -48,7 +50,7 @@ public class ZohoTokenManager {
      * Initializes the refresh token from file at startup.
      * Throws error and halts app if not available.
      */
-//    @PostConstruct
+    @PostConstruct
     public void init() {
         Path path = Paths.get(refreshTokenFilePath);
         try {
@@ -101,21 +103,22 @@ public class ZohoTokenManager {
 
             log.info("Refreshing Zoho access token using refresh token: {}", mask(refreshToken));
 
-            // Prepare request payload
+            // Build the URL with query parameters, per Zoho official docs
+            String url = TOKEN_URL
+                    + "?refresh_token=" + URLEncoder.encode(refreshToken, StandardCharsets.UTF_8)
+                    + "&client_id=" + URLEncoder.encode(clientId, StandardCharsets.UTF_8)
+                    + "&client_secret=" + URLEncoder.encode(clientSecret, StandardCharsets.UTF_8)
+                    + "&grant_type=refresh_token";
+
             HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-            String body = "refresh_token=" + refreshToken +
-                    "&client_id=" + clientId +
-                    "&client_secret=" + clientSecret +
-                    "&grant_type=refresh_token";
+            headers.setAccept(List.of(MediaType.APPLICATION_JSON));
 
-            HttpEntity<String> entity = new HttpEntity<>(body, headers);
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
 
-            // Exchange with Zoho OAuth endpoint
             ResponseEntity<Map> response;
             try {
                 response = restTemplate.exchange(
-                        TOKEN_URL,
+                        url,
                         HttpMethod.POST,
                         entity,
                         Map.class
@@ -140,7 +143,7 @@ public class ZohoTokenManager {
             String accessToken = rawAccessToken.toString().trim();
 
             Object rawExpiresIn = result.get("expires_in");
-            int expiresIn = 3600; // Default 1 hour
+            int expiresIn = 3600;
             if (rawExpiresIn != null) {
                 try {
                     expiresIn = Integer.parseInt(rawExpiresIn.toString());
@@ -156,7 +159,7 @@ public class ZohoTokenManager {
 
             log.info("Zoho access token refreshed, expires in {} seconds (at {}).", expiresIn, expiresAt);
 
-            // Handle Zoho refresh token rotation if present
+            // Do token rotation logic if present
             Object rawRefreshToken = result.get("refresh_token");
             if (rawRefreshToken != null) {
                 String newRefreshToken = rawRefreshToken.toString().trim();

@@ -17,5 +17,5 @@ public class HolidayResponse {
     private String shiftName;
     private boolean isRestrictedHoliday;
     private boolean isHalfday;
-    private Integer session;
+    private int session;
 }
