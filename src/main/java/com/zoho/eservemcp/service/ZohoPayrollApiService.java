@@ -56,12 +56,16 @@ public class ZohoPayrollApiService {
     }
 
     /**
-     * Fetch leave records using Zoho V2 API.
+     * Fetch leave records using Zoho V2 API (no portalID needed).
+     * Params:
+     *   - from: start date
+     *   - to: end date
+     *   - employeeIds: List of Zoho Erecnos (resolved by email before calling)
+     *   - dateFormat: string as per Zoho requirement
      */
     public ZohoLeaveRecordsResponseV2 fetchLeaveRecords(
-            String portalID, String from, String to, List<String> employeeIds, String dateFormat) {
+            String from, String to, List<String> employeeIds, String dateFormat) {
         var uri = UriComponentsBuilder.fromUriString(baseUrl + "/v2/leavetracker/leaves/records")
-                .queryParam("portalID", portalID)
                 .queryParam("from", from)
                 .queryParam("to", to)
                 .queryParam("dateFormat", dateFormat)
@@ -70,8 +74,7 @@ public class ZohoPayrollApiService {
         HttpHeaders headers = createHeaders();
         try {
             ResponseEntity<ZohoLeaveRecordsResponseV2> resp = restTemplate.exchange(
-                    uri, HttpMethod.GET, new HttpEntity<>(headers), ZohoLeaveRecordsResponseV2.class
-            );
+                    uri, HttpMethod.GET, new HttpEntity<>(headers), ZohoLeaveRecordsResponseV2.class);
             return resp.getBody();
         } catch (Exception e) {
             log.error("Error fetching leave records", e);
@@ -80,22 +83,20 @@ public class ZohoPayrollApiService {
     }
 
     /**
-     * Fetch Booked & Balance report using Zoho V2 API.
+     * Fetch Booked & Balance report from Zoho API (leaveTypeIds now omitted).
      */
     public ZohoBookedAndBalanceReport fetchBookedAndBalance(
-            String from, String to, String unit, List<String> employeeIds, List<String> leaveTypeIds) {
+            String from, String to, String unit, List<String> employeeIds) {
         var uri = UriComponentsBuilder.fromUriString(baseUrl + "/v2/leavetracker/reports/bookedAndBalance")
                 .queryParam("from", from)
                 .queryParam("to", to)
                 .queryParam("unit", unit)
                 .queryParam("employee", String.join(",", employeeIds))
-                .queryParam("leavetype", String.join(",", leaveTypeIds))
                 .build().toUri();
         HttpHeaders headers = createHeaders();
         try {
             ResponseEntity<ZohoBookedAndBalanceReport> resp = restTemplate.exchange(
-                    uri, HttpMethod.GET, new HttpEntity<>(headers), ZohoBookedAndBalanceReport.class
-            );
+                    uri, HttpMethod.GET, new HttpEntity<>(headers), ZohoBookedAndBalanceReport.class);
             return resp.getBody();
         } catch (Exception e) {
             log.error("Error fetching booked and balance report", e);
@@ -128,11 +129,9 @@ public class ZohoPayrollApiService {
     /**
      * Fetch holidays from Zoho API
      */
-    public ZohoHolidaysResponse fetchHolidays(
-            String location, String shift, String employee, boolean upcoming, String from, String to, String dateFormat) {
+    public ZohoHolidaysResponse fetchHolidays(String location, String shift, String employee, boolean upcoming, String from, String to, String dateFormat) {
 
-        String url = String.format(
-                "%s/leave/v2/holidays/get?location=%s&shift=%s&employee=%s&upcoming=%s&from=%s&to=%s&dateFormat=%s",
+        String url = String.format("%s/leave/v2/holidays/get?location=%s&shift=%s&employee=%s&upcoming=%s&from=%s&to=%s&dateFormat=%s",
                 baseUrl, location, shift, employee, upcoming, from, to, dateFormat);
 
         HttpHeaders headers = createHeaders();
