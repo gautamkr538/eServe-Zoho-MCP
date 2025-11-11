@@ -5,7 +5,6 @@ import com.zoho.eservemcp.dto.response.ZohoBookedAndBalanceReport;
 import com.zoho.eservemcp.dto.response.ZohoHolidaysResponse;
 import com.zoho.eservemcp.dto.response.ZohoLeaveRecordsResponseV2;
 import com.zoho.eservemcp.entity.Employee;
-import com.zoho.eservemcp.exception.DateValidationException;
 import com.zoho.eservemcp.exception.DomainValidationException;
 import com.zoho.eservemcp.exception.EmployeeNotFoundException;
 import com.zoho.eservemcp.exception.InputValidationException;
@@ -25,10 +24,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 
@@ -181,31 +176,5 @@ public class ZohoPayrollMcpTools {
         }
         return employeeRepository.findByEmailAndIsActive(email, true)
                 .orElseThrow(() -> new EmployeeNotFoundException(email, false));
-    }
-
-    // Parse date from string, throw if invalid
-    private LocalDate parseDate(String dateStr, String fieldName) {
-        if (dateStr == null || dateStr.trim().isEmpty()) {
-            throw InputValidationException.emptyField(fieldName);
-        }
-        try {
-            return LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE);
-        } catch (DateTimeParseException e) {
-            throw DateValidationException.invalidFormat(fieldName, dateStr);
-        }
-    }
-
-    // Validate date range: fromDate <= toDate, max 1 month, fromDate not in future
-    private void validateDateRange(LocalDate fromDate, LocalDate toDate) {
-        if (fromDate.isAfter(toDate)) {
-            throw DateValidationException.invalidRange(fromDate, toDate);
-        }
-        long monthsBetween = ChronoUnit.MONTHS.between(fromDate, toDate);
-        if (monthsBetween > 1) {
-            throw DateValidationException.rangeExceedsLimit(1);
-        }
-        if (fromDate.isAfter(LocalDate.now())) {
-            throw DateValidationException.futureDate("fromDate");
-        }
     }
 }
