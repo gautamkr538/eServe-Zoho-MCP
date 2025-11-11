@@ -1,5 +1,6 @@
 package com.zoho.eservemcp.exception;
 
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
 import java.util.Map;
@@ -7,6 +8,7 @@ import java.util.Map;
 /**
  * Exception thrown when input parameter validation fails
  */
+@Getter
 public class InputValidationException extends McpBaseException {
     
     private static final String ERROR_CODE = "INVALID_INPUT";
@@ -34,8 +36,5 @@ public class InputValidationException extends McpBaseException {
             String.format("Invalid email format: %s", email)
         );
     }
-    
-    public Map<String, String> getFieldErrors() {
-        return fieldErrors;
-    }
+
 }

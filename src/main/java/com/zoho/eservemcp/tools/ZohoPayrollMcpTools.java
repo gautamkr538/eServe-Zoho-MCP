@@ -1,9 +1,16 @@
 package com.zoho.eservemcp.tools;
 
-import com.zoho.eservemcp.dto.response.*;
-import com.zoho.eservemcp.dto.response.ZohoEntitlementObject;
+import com.zoho.eservemcp.dto.response.HolidayResponse;
+import com.zoho.eservemcp.dto.response.ZohoBookedAndBalanceReport;
+import com.zoho.eservemcp.dto.response.ZohoHolidaysResponse;
+import com.zoho.eservemcp.dto.response.ZohoLeaveRecordsResponseV2;
 import com.zoho.eservemcp.entity.Employee;
-import com.zoho.eservemcp.exception.*;
+import com.zoho.eservemcp.exception.DateValidationException;
+import com.zoho.eservemcp.exception.DomainValidationException;
+import com.zoho.eservemcp.exception.EmployeeNotFoundException;
+import com.zoho.eservemcp.exception.InputValidationException;
+import com.zoho.eservemcp.exception.McpBaseException;
+import com.zoho.eservemcp.exception.McpToolException;
 import com.zoho.eservemcp.repository.EmployeeRepository;
 import com.zoho.eservemcp.service.ZohoPayrollApiService;
 import com.zoho.eservemcp.utils.PayrollResponseMapper;
@@ -22,8 +29,8 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class ZohoPayrollMcpTools {
@@ -46,181 +53,119 @@ public class ZohoPayrollMcpTools {
     }
 
     /**
-     * Fetch employee payslip over a date range (max 1 month) from Zoho Payroll.
+     * Download employee payslip as PDF, return saved file path.
      */
-    @Tool(description = "Fetch employee payslip for a specific pay period from Zoho Payroll. " +
-            "Returns detailed salary breakdown including regular hours, overtime, and leave amounts.")
-    public PayslipResponse getEmployeePayslip(@ToolParam(description = "Employee email (@eservecloud.in domain required)") String email,
-            @ToolParam(description = "Pay period start date (yyyy-MM-dd)") String fromDate, @ToolParam(description = "Pay period end date (yyyy-MM-dd)") String toDate) {
-
-        log.debug("Fetching payslip for employee: {} from {} to {}", email, fromDate, toDate);
-
+    @Tool(description = "Download payslip PDF for an employee from Zoho Payroll and save, return file path.")
+    public String downloadPayslipAsPdfAndReturnPath(
+            @ToolParam(description = "Employee email (@eservecloud.in domain required)") String email,
+            @ToolParam(description = "Pay period ID from Zoho") String payPeriodId) {
         try {
             Employee employee = validateAndFetchEmployee(email);
-
-            LocalDate from = parseDate(fromDate, "fromDate");
-            LocalDate to = parseDate(toDate, "toDate");
-            validateDateRange(from, to);
-
-            ZohoPayrollReportResponse zohoResponse = zohoApiService.fetchPayrollReport(
-                    employee.getZohoErecNo(), from, to);
-
-            PayslipResponse response = responseMapper.mapToPayslipResponse(employee, zohoResponse);
-
-            log.info("Successfully fetched payslip for employee: {}", email);
-            return response;
-        } catch (McpBaseException ex) {
-            log.error("MCP exception while fetching payslip: {}", ex.getMessage());
-            throw ex;
-        } catch (Exception ex) {
-            log.error("Unexpected error while fetching payslip for employee: {}", email, ex);
-            throw new McpToolException("getEmployeePayslip", "Failed to fetch payslip", ex);
-        }
-    }
-
-    /**
-     * Fetch employee leave records over a date range (max 1 month) from Zoho Payroll.
-     */
-    @Tool(description = "Fetch employee leave records for a specific period from Zoho Payroll. " +
-            "Returns leave type, dates, duration, and status.")
-    public LeaveRecordsResponse getEmployeeLeaves(@ToolParam(description = "Employee email (@eservecloud.in domain required)") String email,
-            @ToolParam(description = "Start date (yyyy-MM-dd)") String fromDate, @ToolParam(description = "End date (yyyy-MM-dd)") String toDate) {
-
-        log.debug("Fetching leave records for employee: {} from {} to {}", email, fromDate, toDate);
-
-        try {
-            Employee employee = validateAndFetchEmployee(email);
-
-            LocalDate from = parseDate(fromDate, "fromDate");
-            LocalDate to = parseDate(toDate, "toDate");
-            validateDateRange(from, to);
-
-            ZohoLeaveReportResponse zohoResponse = zohoApiService.fetchLeaveReport(
-                    employee.getZohoErecNo(), from, to);
-
-            LeaveRecordsResponse response = responseMapper.mapToLeaveRecordsResponse(employee, zohoResponse);
-
-            log.info("Successfully fetched leave records for employee: {}", email);
-            return response;
-        } catch (McpBaseException ex) {
-            log.error("MCP exception while fetching leave records: {}", ex.getMessage());
-            throw ex;
-        } catch (Exception ex) {
-            log.error("Unexpected error while fetching leave records for employee: {}", email, ex);
-            throw new McpToolException("getEmployeeLeaves", "Failed to fetch leave records", ex);
-        }
-    }
-
-    /**
-     * Fetch and summarize leave: entitlements, counts taken/left/total for dashboard.
-     */
-    @Tool(description = "Get detailed leave summary (taken/left/total) for employee, including entitlements.")
-    public LeaveSummaryResponse getEmployeeLeaveSummary(@ToolParam(description = "Employee email (@eservecloud.in domain required)") String email) {
-        log.debug("Fetching leave summary for employee: {}", email);
-        try {
-            Employee employee = validateAndFetchEmployee(email);
-
-            // Fetch leave entitlements (balances) from Zoho (use proper DTO)
-            ZohoLeaveBalanceResponse balanceResponse = zohoApiService.fetchLeaveBalance(employee.getZohoErecNo());
-            List<ZohoEntitlementObject> zohoEntitlements =
-                    (balanceResponse != null && balanceResponse.getResponse() != null)
-                            ? balanceResponse.getResponse().getResult()
-                            : Collections.emptyList();
-            // Fetch all leaves taken so far this year (for summary)
-            ZohoLeaveReportResponse yearLeavesResponse = zohoApiService.fetchLeaveReport(employee.getZohoErecNo(), LocalDate.now().withDayOfYear(1), LocalDate.now());
-
-            // Map to MCP DTOs
-            List<LeaveRecordsResponse.LeaveEntitlement> entitlements =
-                    responseMapper.mapEntitlementsFromZoho(zohoEntitlements);
-
-            List<LeaveRecordsResponse.LeaveDetail> leaveDetails = yearLeavesResponse != null &&
-                    yearLeavesResponse.getResponse() != null &&
-                    yearLeavesResponse.getResponse().getResult() != null ?
-                    yearLeavesResponse.getResponse().getResult().stream()
-                            .map(responseMapper::mapToLeaveDetail)
-                            .collect(java.util.stream.Collectors.toList()) :
-                    Collections.emptyList();
-
-            LeaveSummaryResponse summary = responseMapper.mapToLeaveSummary(employee, entitlements, leaveDetails);
-
-            log.info("Successfully fetched leave summary for employee: {}", email);
-            return summary;
-        } catch (McpBaseException ex) {
-            log.error("MCP exception while fetching leave summary: {}", ex.getMessage());
-            throw ex;
-        } catch (Exception ex) {
-            log.error("Unexpected error while fetching leave summary for employee: {}", email, ex);
-            throw new McpToolException("getEmployeeLeaveSummary", "Failed to fetch leave summary", ex);
-        }
-    }
-
-    /**
-     * Download employee payslip as PDF for agent workflow and save to file, returning the file path.
-     */
-    @Tool(description = "Download employee payslip as PDF for agent workflow and save to file, returning the file path.")
-    public String downloadPayslipAsPdfAndReturnPath(@ToolParam(description = "Employee email (@eservecloud.in domain required)") String email,
-            @ToolParam(description = "Pay period ID") String payPeriodId) {
-
-        Logger log = LoggerFactory.getLogger(getClass());
-        Employee employee = null;
-        try {
-            employee = validateAndFetchEmployee(email);
             if (payPeriodId == null || payPeriodId.trim().isEmpty()) {
-                throw new McpToolException("PayPeriodId cannot be empty");
+                throw new McpToolException("downloadPayslipAsPdfAndReturnPath", "PayPeriodId cannot be empty");
             }
-        } catch (McpBaseException ex) {
-            log.error("Validation error for downloadPayslip: {}", ex.getMessage());
-            throw ex;
-        } catch (Exception ex) {
-            log.error("Unexpected validation error: {}", ex.getMessage(), ex);
-            throw new McpToolException("downloadPayslipAsPdfAndReturnPath", "Validation failed", ex);
-        }
-
-        byte[] pdfBytes;
-        try {
-            pdfBytes = zohoApiService.downloadPayslip(employee.getZohoErecNo(), payPeriodId);
+            byte[] pdfBytes = zohoApiService.downloadPayslip(employee.getZohoErecNo(), payPeriodId);
             if (pdfBytes == null || pdfBytes.length == 0) {
-                log.error("Payslip PDF bytes are empty for employee: {} and period: {}", email, payPeriodId);
-                throw new McpToolException("Received empty PDF from payroll API");
+                throw new McpToolException("downloadPayslipAsPdfAndReturnPath", "No PDF downloaded from Zoho.");
             }
-        } catch (McpBaseException ex) {
-            log.error("Payroll API error: {}", ex.getMessage());
-            throw ex;
-        } catch (Exception ex) {
-            log.error("Failed to download payslip from Zoho for {} period {}: {}", email, payPeriodId, ex.getMessage(), ex);
-            throw new McpToolException("downloadPayslipAsPdfAndReturnPath", "Error downloading payslip from Zoho", ex);
-        }
-
-        String safeEmail = email.replaceAll("@.*$", "").replaceAll("[^a-zA-Z0-9]", "_");
-        String fileName = "payslip_" + safeEmail + "_" + payPeriodId + ".pdf";
-        String pathString = "/tmp/" + fileName;
-        Path path = Paths.get(pathString);
-
-        try {
+            String safeEmail = email.replaceAll("@.*$", "").replaceAll("[^a-zA-Z0-9]", "_");
+            String fileName = "payslip_" + safeEmail + "_" + payPeriodId + ".pdf";
+            Path path = Paths.get("/tmp/" + fileName);
             Files.write(path, pdfBytes);
-            log.info("Payslip PDF saved for user {}: {}", email, pathString);
-            return pathString;
+            return path.toString();
+        } catch (McpBaseException ex) {
+            log.error("Payslip PDF error: {}", ex.getMessage());
+            throw ex;
         } catch (IOException e) {
             log.error("Failed to write PDF to disk: {}", e.getMessage(), e);
             throw new McpToolException("downloadPayslipAsPdfAndReturnPath", "Failed to write PDF file to disk", e);
+        } catch (Exception ex) {
+            log.error("Unexpected error during payslip PDF download: {}", ex.getMessage(), ex);
+            throw new McpToolException("downloadPayslipAsPdfAndReturnPath", "Error downloading payslip", ex);
         }
     }
 
     /**
-     * Fetch holidays list from Zoho (V2 API) for an employee in a location/shift over a date range.
+     * Fetch leave records using Zoho People API V2 for multiple employees.
      */
-    @Tool(description = "Fetch holidays list from Zoho (V2 API) for an employee in a location/shift over a date range")
+    @Tool(description = "Fetch leave records by employee(s) from Zoho People V2. Maps Zoho recordID to leave record DTO.")
+    public Map<String, ZohoLeaveRecordsResponseV2.LeaveRecord> getEmployeeLeaveRecords(
+            @ToolParam(description = "Zoho People Org portalID (ZSOID)") String portalID,
+            @ToolParam(description = "From date (yyyy-MM-dd or org date format)") String from,
+            @ToolParam(description = "To date (yyyy-MM-dd or org date format)") String to,
+            @ToolParam(description = "Employee Erecno list") List<String> employeeIds,
+            @ToolParam(description = "Date format for Zoho API") String dateFormat) {
+        try {
+            if (portalID == null || portalID.isEmpty())
+                throw new McpToolException("getEmployeeLeaveRecords", "portalID required");
+            if (employeeIds == null || employeeIds.isEmpty())
+                throw new McpToolException("getEmployeeLeaveRecords", "employeeIds required (at least one needed)");
+            ZohoLeaveRecordsResponseV2 records = zohoApiService.fetchLeaveRecords(portalID, from, to, employeeIds, dateFormat);
+            if (records == null || records.records() == null || records.records().isEmpty())
+                throw new McpToolException("getEmployeeLeaveRecords", "No leave records found.");
+            return records.records();
+        } catch (McpToolException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Error in getEmployeeLeaveRecords", e);
+            throw new McpToolException("getEmployeeLeaveRecords", "Error fetching leave records", e);
+        }
+    }
+
+    /**
+     * Fetch booked and balance leave report.
+     */
+    @Tool(description = "Fetch booked/balance leave report for employees. Returns leave entitlements/statistics.")
+    public ZohoBookedAndBalanceReport getBookedAndBalanceReport(
+            @ToolParam(description = "From date") String from,
+            @ToolParam(description = "To date") String to,
+            @ToolParam(description = "Unit (Day|Hour)") String unit,
+            @ToolParam(description = "Employee Erecno list") List<String> employeeIds,
+            @ToolParam(description = "Optional leave type IDs") List<String> leaveTypeIds) {
+        try {
+            if (employeeIds == null || employeeIds.isEmpty())
+                throw new McpToolException("getBookedAndBalanceReport", "employeeIds required");
+            ZohoBookedAndBalanceReport report = zohoApiService.fetchBookedAndBalance(from, to, unit, employeeIds, leaveTypeIds);
+            if (report == null || report.report() == null || report.report().isEmpty())
+                throw new McpToolException("getBookedAndBalanceReport", "No booked/balance data found.");
+            return report;
+        } catch (McpToolException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Error in getBookedAndBalanceReport", e);
+            throw new McpToolException("getBookedAndBalanceReport", "Error fetching BookedAndBalance report", e);
+        }
+    }
+
+    /**
+     * Fetch holidays from Zoho (V2). If location not provided, default to Bangalore. If upcoming is not provided, use false.
+     */
+    @Tool(description = """
+        Get list of holidays for specified or default location/shift/employee/date-range from Zoho (V2).
+        Defaults: location = Bangalore if not provided, upcoming = false.
+        """)
     public List<HolidayResponse> getEmployeeHolidays(
-            @ToolParam(description = "Location name") String location,
-            @ToolParam(description = "Shift name") String shift,
-            @ToolParam(description = "Employee email") String employeeEmail,
-            @ToolParam(description = "Upcoming only") boolean upcoming,
-            @ToolParam(description = "From date (dd-MMM-yyyy)") String from,
-            @ToolParam(description = "To date (dd-MMM-yyyy)") String to,
-            @ToolParam(description = "Date format") String dateFormat
+            @ToolParam(description = "Location name as per Zoho (default: Bangalore)") String location,
+            @ToolParam(description = "Shift name as per Zoho") String shift,
+            @ToolParam(description = "Employee Zoho Erecno or email") String employee,
+            @ToolParam(description = "True for only upcoming holidays, otherwise all; default is false") Boolean upcoming,
+            @ToolParam(description = "From date (dd-MMM-yyyy or org format)") String from,
+            @ToolParam(description = "To date (dd-MMM-yyyy or org format)") String to,
+            @ToolParam(description = "Date format, e.g. dd-MMM-yyyy") String dateFormat
     ) {
-        ZohoHolidaysResponse response = zohoApiService.fetchHolidays(location, shift, employeeEmail, upcoming, from, to, dateFormat);
-        return responseMapper.mapToHolidayResponses(response.getData());
+        try {
+            String resolvedLocation = (location == null || location.isBlank()) ? "Bangalore" : location;
+            boolean resolvedUpcoming = (upcoming == null) ? false : upcoming;
+            ZohoHolidaysResponse response = zohoApiService.fetchHolidays(resolvedLocation, shift, employee, resolvedUpcoming, from, to, dateFormat);
+            if (response == null || response.getData() == null || response.getData().isEmpty())
+                throw new McpToolException("getEmployeeHolidays", "No holidays found for given query.");
+            return responseMapper.mapToHolidayResponses(response.getData());
+        } catch (McpToolException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Error in getEmployeeHolidays", e);
+            throw new McpToolException("getEmployeeHolidays", "Unexpected error fetching holidays", e);
+        }
     }
 
     // Validate email format and domain, fetch active employee or throw

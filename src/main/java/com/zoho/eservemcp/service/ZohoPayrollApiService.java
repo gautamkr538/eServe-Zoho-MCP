@@ -1,24 +1,19 @@
 package com.zoho.eservemcp.service;
 
+import com.zoho.eservemcp.dto.response.ZohoBookedAndBalanceReport;
 import com.zoho.eservemcp.dto.response.ZohoHolidaysResponse;
-import com.zoho.eservemcp.dto.response.ZohoLeaveBalanceResponse;
-import com.zoho.eservemcp.dto.response.ZohoLeaveReportResponse;
-import com.zoho.eservemcp.dto.response.ZohoPayrollReportResponse;
-import com.zoho.eservemcp.exception.DateValidationException;
+import com.zoho.eservemcp.dto.response.ZohoLeaveRecordsResponseV2;
 import com.zoho.eservemcp.exception.ZohoApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpClientErrorException;
-import org.springframework.web.client.HttpServerErrorException;
-import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
-import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.ChronoUnit;
+import java.util.List;
 
 @Service
 public class ZohoPayrollApiService {
@@ -38,183 +33,6 @@ public class ZohoPayrollApiService {
         this.tokenManager = tokenManager;
     }
 
-    /**
-     * Fetch payroll report directly from Zoho API
-     * No caching, no persistence - pure pass-through
-     */
-    public ZohoPayrollReportResponse fetchPayrollReport(String userErecNo, LocalDate fromDate, LocalDate toDate) {
-
-        log.info("Fetching payroll report for user: {} from {} to {}", userErecNo, fromDate, toDate);
-
-        validateDateRange(fromDate, toDate);
-
-        String url = buildPayrollReportUrl(userErecNo, fromDate, toDate);
-        HttpHeaders headers = createHeaders();
-
-        try {
-            ResponseEntity<ZohoPayrollReportResponse> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    new HttpEntity<>(headers),
-                    ZohoPayrollReportResponse.class
-            );
-
-            validateResponse(response, "payroll report");
-
-            ZohoPayrollReportResponse responseBody = response.getBody();
-            validateZohoApiStatus(responseBody.getResponse());
-
-            log.info("Successfully fetched payroll report for user: {}", userErecNo);
-            return responseBody;
-
-        } catch (HttpClientErrorException e) {
-            handleHttpClientError(e, "payroll report");
-            throw e; // Won't reach here, but needed for compilation
-        } catch (HttpServerErrorException e) {
-            handleHttpServerError(e, "payroll report");
-            throw e; // Won't reach here, but needed for compilation
-        } catch (ResourceAccessException e) {
-            log.error("Zoho API timeout while fetching payroll report: {}", e.getMessage());
-            throw ZohoApiException.timeout();
-        } catch (Exception e) {
-            log.error("Unexpected error while fetching payroll report", e);
-            throw new ZohoApiException("Unexpected error while fetching payroll report", e);
-        }
-    }
-
-    /**
-     * Fetch leave records directly from Zoho API
-     */
-    public ZohoLeaveReportResponse fetchLeaveReport(String userErecNo, LocalDate fromDate, LocalDate toDate) {
-
-        log.info("Fetching leave report for user: {} from {} to {}", userErecNo, fromDate, toDate);
-
-        validateDateRange(fromDate, toDate);
-
-        String url = buildLeaveReportUrl(userErecNo, fromDate, toDate);
-        HttpHeaders headers = createHeaders();
-
-        try {
-            ResponseEntity<ZohoLeaveReportResponse> response = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), ZohoLeaveReportResponse.class);
-
-            validateResponse(response, "leave report");
-
-            ZohoLeaveReportResponse responseBody = response.getBody();
-            validateZohoApiStatus(responseBody.getResponse());
-
-            log.info("Successfully fetched leave report for user: {}", userErecNo);
-            return responseBody;
-
-        } catch (HttpClientErrorException e) {
-            handleHttpClientError(e, "leave report");
-            throw e;
-        } catch (HttpServerErrorException e) {
-            handleHttpServerError(e, "leave report");
-            throw e;
-        } catch (ResourceAccessException e) {
-            log.error("Zoho API timeout while fetching leave report: {}", e.getMessage());
-            throw ZohoApiException.timeout();
-        } catch (Exception e) {
-            log.error("Unexpected error while fetching leave report", e);
-            throw new ZohoApiException("Unexpected error while fetching leave report", e);
-        }
-    }
-
-    // Validate date range constraints
-    private void validateDateRange(LocalDate fromDate, LocalDate toDate) {
-        if (fromDate.isAfter(toDate)) {
-            throw DateValidationException.invalidRange(fromDate, toDate);
-        }
-
-        long monthsBetween = ChronoUnit.MONTHS.between(fromDate, toDate);
-        if (monthsBetween > 1) {
-            throw DateValidationException.rangeExceedsLimit(1);
-        }
-
-        if (fromDate.isAfter(LocalDate.now())) {
-            throw DateValidationException.futureDate("fromDate");
-        }
-    }
-
-    // Validate that response body is not null
-    private void validateResponse(ResponseEntity<?> response, String reportType) {
-        if (response.getBody() == null) {
-            log.error("Empty response received from Zoho API for {}", reportType);
-            throw new ZohoApiException("Empty response from Zoho API for " + reportType);
-        }
-    }
-
-    // Validate Zoho API response status codes
-    private void validateZohoApiStatus(Object responseObject) {
-        try {
-            Integer status = null;
-            String message = null;
-
-            if (responseObject instanceof ZohoPayrollReportResponse.PayrollResponse) {
-                ZohoPayrollReportResponse.PayrollResponse payrollResponse =
-                        (ZohoPayrollReportResponse.PayrollResponse) responseObject;
-                status = payrollResponse.getStatus();
-                message = payrollResponse.getMessage();
-            } else if (responseObject instanceof ZohoLeaveReportResponse.LeaveResponse) {
-                ZohoLeaveReportResponse.LeaveResponse leaveResponse =
-                        (ZohoLeaveReportResponse.LeaveResponse) responseObject;
-                status = leaveResponse.getStatus();
-                message = leaveResponse.getMessage();
-            }
-
-            if (status != null && status != 0) {
-                log.error("Zoho API returned error status: {} - {}", status, message);
-                throw new ZohoApiException(
-                        "Zoho API returned error",
-                        status,
-                        message != null ? message : "Unknown error"
-                );
-            }
-        } catch (ClassCastException e) {
-            log.error("Invalid response type from Zoho API", e);
-            throw new ZohoApiException("Invalid response format from Zoho API", e);
-        }
-    }
-
-    // Handle 4xx errors
-    private void handleHttpClientError(HttpClientErrorException e, String reportType) {
-        HttpStatus statusCode = (HttpStatus) e.getStatusCode();
-        String responseBody = e.getResponseBodyAsString();
-
-        log.error("Zoho API client error ({}): {} - {}", statusCode, reportType, responseBody);
-
-        switch (statusCode) {
-            case UNAUTHORIZED:
-                throw ZohoApiException.authenticationError();
-            case FORBIDDEN:
-                throw new ZohoApiException("Access forbidden. Check API permissions.");
-            case NOT_FOUND:
-                throw new ZohoApiException("Zoho API endpoint not found: " + reportType);
-            case TOO_MANY_REQUESTS:
-                throw ZohoApiException.rateLimitExceeded();
-            case BAD_REQUEST:
-                throw new ZohoApiException("Bad request to Zoho API: " + responseBody);
-            default:
-                throw new ZohoApiException(
-                        String.format("Zoho API client error (%s): %s", statusCode, responseBody),
-                        e
-                );
-        }
-    }
-
-    // Handle server-side errors from Zoho API
-    private void handleHttpServerError(HttpServerErrorException e, String reportType) {
-        HttpStatus statusCode = (HttpStatus) e.getStatusCode();
-        String responseBody = e.getResponseBodyAsString();
-
-        log.error("Zoho API server error ({}): {} - {}", statusCode, reportType, responseBody);
-
-        throw new ZohoApiException(
-                String.format("Zoho API server error (%s) for %s: %s", statusCode, reportType, responseBody),
-                e
-        );
-    }
-
     // Create HTTP headers with OAuth token
     private HttpHeaders createHeaders() {
         HttpHeaders headers = new HttpHeaders();
@@ -225,45 +43,51 @@ public class ZohoPayrollApiService {
         return headers;
     }
 
-    private String buildPayrollReportUrl(String userErecNo, LocalDate fromDate, LocalDate toDate) {
-        return String.format(
-                "%s/api/timesheet/getpayrollreport?userErecNo=%s&fromDate=%s&toDate=%s&dateFormat=yyyy-MM-dd&sIndex=0&limit=100",
-                baseUrl,
-                userErecNo,
-                fromDate.format(DATE_FORMATTER),
-                toDate.format(DATE_FORMATTER)
-        );
-    }
-
-    private String buildLeaveReportUrl(String userErecNo, LocalDate fromDate, LocalDate toDate) {
-        return String.format(
-                "%s/api/leave/getLeaveRecords?userErecNo=%s&fromDate=%s&toDate=%s",
-                baseUrl,
-                userErecNo,
-                fromDate.format(DATE_FORMATTER),
-                toDate.format(DATE_FORMATTER)
-        );
+    /**
+     * Fetch leave records using Zoho V2 API.
+     */
+    public ZohoLeaveRecordsResponseV2 fetchLeaveRecords(
+            String portalID, String from, String to, List<String> employeeIds, String dateFormat) {
+        var uri = UriComponentsBuilder.fromUriString(baseUrl + "/api/v2/leavetracker/leaves/records")
+                .queryParam("portalID", portalID)
+                .queryParam("from", from)
+                .queryParam("to", to)
+                .queryParam("dateFormat", dateFormat)
+                .queryParam("employee", String.join(",", employeeIds))
+                .build().toUri();
+        HttpHeaders headers = createHeaders();
+        try {
+            ResponseEntity<ZohoLeaveRecordsResponseV2> resp = restTemplate.exchange(
+                    uri, HttpMethod.GET, new HttpEntity<>(headers), ZohoLeaveRecordsResponseV2.class
+            );
+            return resp.getBody();
+        } catch (Exception e) {
+            log.error("Error fetching leave records", e);
+            throw new ZohoApiException("Fetch leave records failed", e);
+        }
     }
 
     /**
-     * Fetch leave balance details for an employee.
-     * You may need to consult Zoho People API docs for the exact endpoint.
-     * Example endpoint: /api/leave/getLeaveBalance (pseudo)
+     * Fetch Booked & Balance report using Zoho V2 API.
      */
-    public ZohoLeaveBalanceResponse fetchLeaveBalance(String userErecNo) {
-        log.info("Fetching leave balance for user: {}", userErecNo);
-        String url = String.format("%s/api/leave/getLeaveBalance?userErecNo=%s", baseUrl, userErecNo);
+    public ZohoBookedAndBalanceReport fetchBookedAndBalance(
+            String from, String to, String unit, List<String> employeeIds, List<String> leaveTypeIds) {
+        var uri = UriComponentsBuilder.fromUriString(baseUrl + "/api/v2/leavetracker/reports/bookedAndBalance")
+                .queryParam("from", from)
+                .queryParam("to", to)
+                .queryParam("unit", unit)
+                .queryParam("employee", String.join(",", employeeIds))
+                .queryParam("leavetype", String.join(",", leaveTypeIds))
+                .build().toUri();
         HttpHeaders headers = createHeaders();
         try {
-            ResponseEntity<ZohoLeaveBalanceResponse> response = restTemplate.exchange(
-                    url, HttpMethod.GET, new HttpEntity<>(headers), ZohoLeaveBalanceResponse.class);
-            ZohoLeaveBalanceResponse responseBody = response.getBody();
-            // If you want: validate responseBody.getResponse().getStatus() == 0, etc
-            log.info("Successfully fetched leave balance for user: {}", userErecNo);
-            return responseBody;
+            ResponseEntity<ZohoBookedAndBalanceReport> resp = restTemplate.exchange(
+                    uri, HttpMethod.GET, new HttpEntity<>(headers), ZohoBookedAndBalanceReport.class
+            );
+            return resp.getBody();
         } catch (Exception e) {
-            log.error("Failed to fetch leave balance", e);
-            throw new ZohoApiException("Failed to fetch leave balance", e);
+            log.error("Error fetching booked and balance report", e);
+            throw new ZohoApiException("Fetch booked and balance failed", e);
         }
     }
 

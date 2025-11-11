@@ -1,10 +1,12 @@
 package com.zoho.eservemcp.exception;
 
+import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
 /**
  * Exception thrown when Zoho API calls fail
  */
+@Getter
 public class ZohoApiException extends McpBaseException {
     
     private static final String ERROR_CODE = "ZOHO_API_ERROR";
@@ -45,12 +47,5 @@ public class ZohoApiException extends McpBaseException {
     public static ZohoApiException timeout() {
         return new ZohoApiException("Zoho API request timed out. Please try again.");
     }
-    
-    public Integer getZohoStatusCode() {
-        return zohoStatusCode;
-    }
-    
-    public String getZohoErrorMessage() {
-        return zohoErrorMessage;
-    }
+
 }

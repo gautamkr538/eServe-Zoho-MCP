@@ -1,8 +1,11 @@
 package com.zoho.eservemcp.exception;
 
+import lombok.Getter;
+
 /**
  * Base exception class for all MCP server exceptions
  */
+@Getter
 public abstract class McpBaseException extends RuntimeException {
     
     private final String errorCode;
@@ -19,12 +22,5 @@ public abstract class McpBaseException extends RuntimeException {
         this.errorCode = errorCode;
         this.httpStatus = httpStatus;
     }
-    
-    public String getErrorCode() {
-        return errorCode;
-    }
-    
-    public int getHttpStatus() {
-        return httpStatus;
-    }
+
 }
