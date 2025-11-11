@@ -9,7 +9,7 @@ import org.springframework.web.client.RestTemplate;
 @Configuration
 public class RestTemplateConfig {
     
-    @Value("${zoho.api.timeout:30000}")
+    @Value("${zoho.api.timeout:60000}")
     private int timeout;
     
     @Bean
