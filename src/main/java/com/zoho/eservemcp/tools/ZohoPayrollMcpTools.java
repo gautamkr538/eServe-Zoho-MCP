@@ -52,8 +52,7 @@ public class ZohoPayrollMcpTools {
      * Always resolves userErecNo from the provided email (DB/Zoho lookup).
      */
     @Tool(description = "Download payslip PDF for an employee from Zoho Payroll and save, return file path. Only an email is required.")
-    public String downloadPayslipAsPdfAndReturnPath(
-            @ToolParam(description = "Employee email (@eservecloud.in domain required)") String email,
+    public String downloadPayslipAsPdfAndReturnPath(@ToolParam(description = "Employee email (@eservecloud.in domain required)") String email,
             @ToolParam(description = "Pay period ID from Zoho") String payPeriodId) {
         try {
             String userErecNo = resolveAndUpdateErecNoForEmail(email);
