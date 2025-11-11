@@ -1,5 +1,6 @@
 package com.zoho.eservemcp.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.zoho.eservemcp.dto.response.ZohoBookedAndBalanceReport;
 import com.zoho.eservemcp.dto.response.ZohoHolidaysResponse;
 import com.zoho.eservemcp.dto.response.ZohoLeaveRecordsResponseV2;
@@ -7,7 +8,12 @@ import com.zoho.eservemcp.exception.ZohoApiException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -21,8 +27,14 @@ public class ZohoPayrollApiService {
     private static final Logger log = LoggerFactory.getLogger(ZohoPayrollApiService.class);
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ISO_LOCAL_DATE;
 
-    @Value("${zoho.api.base-url}")
+    @Value("${zoho.people.api.base-url}")
     private String baseUrl;
+
+    @Value("${zoho.mail.api.base-url}")
+    private String emailBaseUrl;
+
+    @Value("${zoho.mail.organization-id}")
+    private String zoid;
 
     private final RestTemplate restTemplate;
 
@@ -48,7 +60,7 @@ public class ZohoPayrollApiService {
      */
     public ZohoLeaveRecordsResponseV2 fetchLeaveRecords(
             String portalID, String from, String to, List<String> employeeIds, String dateFormat) {
-        var uri = UriComponentsBuilder.fromUriString(baseUrl + "/api/v2/leavetracker/leaves/records")
+        var uri = UriComponentsBuilder.fromUriString(baseUrl + "/v2/leavetracker/leaves/records")
                 .queryParam("portalID", portalID)
                 .queryParam("from", from)
                 .queryParam("to", to)
@@ -72,7 +84,7 @@ public class ZohoPayrollApiService {
      */
     public ZohoBookedAndBalanceReport fetchBookedAndBalance(
             String from, String to, String unit, List<String> employeeIds, List<String> leaveTypeIds) {
-        var uri = UriComponentsBuilder.fromUriString(baseUrl + "/api/v2/leavetracker/reports/bookedAndBalance")
+        var uri = UriComponentsBuilder.fromUriString(baseUrl + "/v2/leavetracker/reports/bookedAndBalance")
                 .queryParam("from", from)
                 .queryParam("to", to)
                 .queryParam("unit", unit)
@@ -96,7 +108,7 @@ public class ZohoPayrollApiService {
      */
     public byte[] downloadPayslip(String userErecNo, String payPeriodId) {
         log.info("Downloading payslip for user: {} period: {}", userErecNo, payPeriodId);
-        String url = String.format("%s/api/timesheet/downloadPayslip?userErecNo=%s&payPeriodId=%s", baseUrl, userErecNo, payPeriodId);
+        String url = String.format("%s/timesheet/downloadPayslip?userErecNo=%s&payPeriodId=%s", baseUrl, userErecNo, payPeriodId);
         HttpHeaders headers = createHeaders();
         try {
             ResponseEntity<byte[]> response = restTemplate.exchange(
@@ -120,7 +132,7 @@ public class ZohoPayrollApiService {
             String location, String shift, String employee, boolean upcoming, String from, String to, String dateFormat) {
 
         String url = String.format(
-                "%s/api/leave/v2/holidays/get?location=%s&shift=%s&employee=%s&upcoming=%s&from=%s&to=%s&dateFormat=%s",
+                "%s/leave/v2/holidays/get?location=%s&shift=%s&employee=%s&upcoming=%s&from=%s&to=%s&dateFormat=%s",
                 baseUrl, location, shift, employee, upcoming, from, to, dateFormat);
 
         HttpHeaders headers = createHeaders();
@@ -135,6 +147,25 @@ public class ZohoPayrollApiService {
         } catch (Exception ex) {
             log.error("Failed fetching holidays from Zoho", ex);
             throw new ZohoApiException("Failed to fetch holidays from Zoho", ex);
+        }
+    }
+
+    /**
+     * Lookup Zoho employeeId (erecNo) by email.
+     */
+    public String fetchZohoMailZuidByEmail(String email) {
+        String url = String.format("%s/organization/%s/accounts/%s", emailBaseUrl, zoid, email);
+        HttpHeaders headers = createHeaders();
+        try {
+            ResponseEntity<JsonNode> resp = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
+            JsonNode data = resp.getBody().path("data");
+            if (!data.isMissingNode()) {
+                return data.path("zuid").asText();
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("Failed Zoho Mail API zuid lookup for email {}: {}", email, e.getMessage(), e);
+            throw new ZohoApiException("Error looking up zuid for user: " + email, e);
         }
     }
 }

@@ -163,6 +163,31 @@ public class ZohoPayrollMcpTools {
         }
     }
 
+    /**
+     * Fetch Zoho ErecNo by corporate email and update employee record in DB.
+     */
+    @Tool(description = "Fetch and update employee userErecNo (Zoho employeeId) by corporate email.")
+    public String fetchAndSaveZohoErecNo(@ToolParam(description = "Employee email (@eservecloud.in domain required)") String email) {
+        try {
+            if (email == null || !email.contains("@")) {
+                throw new McpToolException("fetchAndSaveZohoErecNo", "A valid email is required.");
+            }
+            String erecNo = zohoApiService.fetchZohoMailZuidByEmail(email);
+            if (erecNo == null) throw new McpToolException("fetchAndSaveZohoErecNo", "Zoho Employee Erecno not found for email: " + email);
+
+            Employee emp = employeeRepository.findByEmailAndIsActive(email, true)
+                    .orElseThrow(() -> new EmployeeNotFoundException(email, false));
+            emp.setZohoErecNo(erecNo);
+            employeeRepository.save(emp);
+            return erecNo;
+        } catch (McpBaseException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to fetch/save Zoho ErecNo: {}", e.getMessage(), e);
+            throw new McpToolException("fetchAndSaveZohoErecNo", "Unexpected error fetching/saving zohoErecNo", e);
+        }
+    }
+
     // Validate email format and domain, fetch active employee or throw
     private Employee validateAndFetchEmployee(String email) {
         if (email == null || email.trim().isEmpty()) {
