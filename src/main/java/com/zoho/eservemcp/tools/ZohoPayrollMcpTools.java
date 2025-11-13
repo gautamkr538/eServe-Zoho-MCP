@@ -5,9 +5,7 @@ import com.zoho.eservemcp.dto.response.ZohoBookedAndBalanceReport;
 import com.zoho.eservemcp.dto.response.ZohoHolidaysResponse;
 import com.zoho.eservemcp.dto.response.ZohoLeaveRecordsResponseV2;
 import com.zoho.eservemcp.entity.Employee;
-import com.zoho.eservemcp.exception.DomainValidationException;
 import com.zoho.eservemcp.exception.EmployeeNotFoundException;
-import com.zoho.eservemcp.exception.InputValidationException;
 import com.zoho.eservemcp.exception.McpBaseException;
 import com.zoho.eservemcp.exception.McpToolException;
 import com.zoho.eservemcp.repository.EmployeeRepository;
@@ -92,7 +90,7 @@ public class ZohoPayrollMcpTools {
     public Map<String, ZohoLeaveRecordsResponseV2.LeaveRecord> getEmployeeLeaveRecords(
             @ToolParam(description = "From date (yyyy-MM-dd or org date format)") String from,
             @ToolParam(description = "To date (yyyy-MM-dd or org date format)") String to,
-            @ToolParam(description = "List of corporate emails for employees") List<String> employeeEmails,
+            @ToolParam(description = "List of corporate emails for employees (@eservecloud.in domain required)") List<String> employeeEmails,
             @ToolParam(description = "Date format, e.g. dd-MMM-yyyy") String dateFormat) {
         try {
             if (employeeEmails == null || employeeEmails.isEmpty())
@@ -125,7 +123,7 @@ public class ZohoPayrollMcpTools {
             @ToolParam(description = "Report FROM date (e.g. start of leave year, yyyy-MM-dd)") String from,
             @ToolParam(description = "Report TO date (e.g. current date, yyyy-MM-dd)") String to,
             @ToolParam(description = "Unit for report, e.g. 'Day' or 'Hour'") String unit,
-            @ToolParam(description = "List of employee corporate emails") List<String> employeeEmails) {
+            @ToolParam(description = "List of employee corporate emails (@eservecloud.in domain required)") List<String> employeeEmails) {
         try {
             if (from == null || from.isBlank() || to == null || to.isBlank() || unit == null || unit.isBlank())
                 throw new McpToolException("getBookedAndBalanceReport", "from, to, unit are required.");
@@ -154,7 +152,7 @@ public class ZohoPayrollMcpTools {
     public List<HolidayResponse> getEmployeeHolidays(
             @ToolParam(description = "Location name as per Zoho (default: Bangalore)") String location,
             @ToolParam(description = "Shift name as per Zoho") String shift,
-            @ToolParam(description = "Employee corporate email") String employee,
+            @ToolParam(description = "Employee corporate email (@eservecloud.in domain required)") String employee,
             @ToolParam(description = "True for only upcoming holidays, otherwise all; default is false") Boolean upcoming,
             @ToolParam(description = "From date (dd-MMM-yyyy or org format)") String from,
             @ToolParam(description = "To date (dd-MMM-yyyy or org format)") String to,
@@ -223,20 +221,5 @@ public class ZohoPayrollMcpTools {
             log.error("Failed to fetch/save Zoho ErecNo: {}", e.getMessage(), e);
             throw new McpToolException("fetchAndSaveZohoErecNo", "Unexpected error fetching/saving zohoErecNo", e);
         }
-    }
-
-    // Validate email format and domain, fetch active employee or throw
-    private Employee validateAndFetchEmployee(String email) {
-        if (email == null || email.trim().isEmpty()) {
-            throw InputValidationException.emptyField("email");
-        }
-        if (!email.contains("@")) {
-            throw InputValidationException.invalidEmail(email);
-        }
-        if (!email.endsWith("@" + ALLOWED_DOMAIN)) {
-            throw new DomainValidationException(email, ALLOWED_DOMAIN);
-        }
-        return employeeRepository.findByEmailAndIsActive(email, true)
-                .orElseThrow(() -> new EmployeeNotFoundException(email, false));
     }
 }
