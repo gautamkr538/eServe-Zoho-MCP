@@ -227,7 +227,12 @@ public class ZohoPayrollMcpTools {
      */
     private String fetchErecNoFromDb(UUID sid) {
         Employee emp = validateAndFetchEmployee(sid);
-        String erecNo = emp.getZohoErecNo();
+        String erecNo = "";
+        if(emp.getZohoErecNo() == null || emp.getZohoErecNo().isBlank()) {
+            erecNo = fetchAndSaveZohoErecNo(sid);
+            emp.setZohoErecNo(erecNo);
+            employeeRepository.save(emp);
+        }
         if (erecNo == null || erecNo.isBlank()) {
             throw new McpToolException("fetchErecNoFromDb", "ZohoErecNo missing for employee sid: " + sid);
         }
