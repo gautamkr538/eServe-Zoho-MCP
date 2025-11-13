@@ -51,8 +51,8 @@ public class ZohoPayrollMcpTools {
      */
     @Tool(description = "Download payslip PDF for an employee using sid (UUID) and pay period ID from Zoho.")
     public String downloadPayslipAsPdfAndReturnPath(
-            @ToolParam(description = "Employee sid (UUID)") UUID sid,
-            @ToolParam(description = "Pay period ID from Zoho") String payPeriodId) {
+            @ToolParam(description = "Employee sid (UUID); Required") UUID sid,
+            @ToolParam(description = "Pay period ID from Zoho; Optional") String payPeriodId) {
         try {
             Employee emp = validateAndFetchEmployee(sid);
             String userErecNo = emp.getZohoErecNo();
@@ -94,9 +94,9 @@ public class ZohoPayrollMcpTools {
     Provide list of employee sids (UUIDs); their ZohoErecNos are fetched from DB.
     """)
     public Map<String, ZohoLeaveRecordsResponseV2.LeaveRecord> getEmployeeLeaveRecords(
-            @ToolParam(description = "From date (yyyy-MM-dd or org date format)") String from,
-            @ToolParam(description = "To date (yyyy-MM-dd or org date format)") String to,
-            @ToolParam(description = "List of employee sids (UUIDs)") List<UUID> employeeSids,
+            @ToolParam(description = "From date (yyyy-MM-dd); default is start date of the current year") String from,
+            @ToolParam(description = "To date (yyyy-MM-dd); default is end date of the current year") String to,
+            @ToolParam(description = "List of employee sids (UUIDs); Required") List<UUID> employeeSids,
             @ToolParam(description = "Date format, e.g. dd-MMM-yyyy") String dateFormat) {
         try {
             if (employeeSids == null || employeeSids.isEmpty())
@@ -124,10 +124,10 @@ public class ZohoPayrollMcpTools {
     Provide list of employee sids (UUIDs); their ZohoErecNos are fetched from DB.
     """)
     public ZohoBookedAndBalanceReport getBookedAndBalanceReport(
-            @ToolParam(description = "Report FROM date (yyyy-MM-dd)") String from,
-            @ToolParam(description = "Report TO date (yyyy-MM-dd)") String to,
-            @ToolParam(description = "Unit for report, e.g. 'Day' or 'Hour'") String unit,
-            @ToolParam(description = "List of employee sids (UUIDs)") List<UUID> employeeSids) {
+            @ToolParam(description = "Report FROM date (yyyy-MM-dd); default is start date of the current year") String from,
+            @ToolParam(description = "Report TO date (yyyy-MM-dd); default is end date of the current year") String to,
+            @ToolParam(description = "Unit for report, e.g. 'Day' or 'Hour'; default Day") String unit,
+            @ToolParam(description = "List of employee sids (UUIDs); Required") List<UUID> employeeSids) {
         try {
             if (from == null || from.isBlank() || to == null || to.isBlank() || unit == null || unit.isBlank())
                 throw new McpToolException("getBookedAndBalanceReport", "from, to, and unit are required.");
@@ -157,11 +157,11 @@ public class ZohoPayrollMcpTools {
         """)
     public List<HolidayResponse> getEmployeeHolidays(
             @ToolParam(description = "Location name as per Zoho (default: Bangalore)") String location,
-            @ToolParam(description = "Shift name as per Zoho") String shift,
-            @ToolParam(description = "Employee sid (UUID)") UUID sid,
-            @ToolParam(description = "True for only upcoming holidays, otherwise all; default is false") Boolean upcoming,
-            @ToolParam(description = "From date (dd-MMM-yyyy or org format)") String from,
-            @ToolParam(description = "To date (dd-MMM-yyyy or org format)") String to,
+            @ToolParam(description = "Shift name as per Zoho; default is General") String shift,
+            @ToolParam(description = "Employee sid (UUID); Required") UUID sid,
+            @ToolParam(description = "True for only upcoming holidays; default is false") Boolean upcoming,
+            @ToolParam(description = "From date (dd-MMM-yyyy or org format); default start date of current year") String from,
+            @ToolParam(description = "To date (dd-MMM-yyyy or org format); default end date of current year") String to,
             @ToolParam(description = "Date format, e.g. dd-MMM-yyyy") String dateFormat
     ) {
         try {
@@ -174,8 +174,7 @@ public class ZohoPayrollMcpTools {
             String resolvedLocation = (location == null || location.isBlank()) ? "Bangalore" : location;
             boolean resolvedUpcoming = (upcoming == null) ? false : upcoming;
 
-            ZohoHolidaysResponse response = zohoApiService.fetchHolidays(
-                    resolvedLocation, shift, userErecNo, resolvedUpcoming, from, to, dateFormat);
+            ZohoHolidaysResponse response = zohoApiService.fetchHolidays(resolvedLocation, shift, userErecNo, resolvedUpcoming, from, to, dateFormat);
 
             if (response == null || response.getData() == null || response.getData().isEmpty())
                 throw new McpToolException("getEmployeeHolidays", "No holidays found for given query.");
@@ -191,7 +190,7 @@ public class ZohoPayrollMcpTools {
      * If not present in DB, fetch from Zoho Mail API using employee's email, update DB, and return it.
      */
     @Tool(description = "Fetch employee ZohoErecNo (employeeId) by sid (UUID). If not in DB, it fetches from Zoho and updates the record.")
-    public String fetchAndSaveZohoErecNo(@ToolParam(description = "Employee sid (UUID)") UUID sid) {
+    public String fetchAndSaveZohoErecNo(@ToolParam(description = "Employee sid (UUID); Required") UUID sid) {
         try {
             Employee emp = employeeRepository.findBySid(sid)
                     .filter(Employee::getIsActive)
