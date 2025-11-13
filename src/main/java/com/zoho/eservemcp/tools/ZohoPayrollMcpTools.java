@@ -55,11 +55,8 @@ public class ZohoPayrollMcpTools {
             @ToolParam(description = "Pay period ID from Zoho; Optional") String payPeriodId) {
         try {
             Employee emp = validateAndFetchEmployee(sid);
-            String userErecNo = emp.getZohoErecNo();
+            String userErecNo = getOrFetchErecNo(emp);
 
-            if (userErecNo == null || userErecNo.isBlank()) {
-                throw new McpToolException("downloadPayslipAsPdfAndReturnPath", "Employee ZohoErecNo is missing in DB");
-            }
             if (payPeriodId == null || payPeriodId.trim().isEmpty()) {
                 throw new McpToolException("downloadPayslipAsPdfAndReturnPath", "PayPeriodId cannot be empty");
             }
@@ -166,10 +163,7 @@ public class ZohoPayrollMcpTools {
     ) {
         try {
             Employee emp = validateAndFetchEmployee(sid);
-            String userErecNo = emp.getZohoErecNo();
-            if (userErecNo == null || userErecNo.isBlank()) {
-                throw new McpToolException("getEmployeeHolidays", "Employee ZohoErecNo missing in DB.");
-            }
+            String userErecNo = getOrFetchErecNo(emp);
 
             String resolvedLocation = (location == null || location.isBlank()) ? "Bangalore" : location;
             boolean resolvedUpcoming = (upcoming == null) ? false : upcoming;
@@ -224,17 +218,28 @@ public class ZohoPayrollMcpTools {
 
     /**
      * Utility: Fetch Employee ErecNo from DB using sid.
+     * If not present in DB, automatically fetches from Zoho API and updates DB.
      */
     private String fetchErecNoFromDb(UUID sid) {
         Employee emp = validateAndFetchEmployee(sid);
-        String erecNo = "";
-        if(emp.getZohoErecNo() == null || emp.getZohoErecNo().isBlank()) {
-            erecNo = fetchAndSaveZohoErecNo(sid);
-            emp.setZohoErecNo(erecNo);
-            employeeRepository.save(emp);
-        }
+        String erecNo = emp.getZohoErecNo();
         if (erecNo == null || erecNo.isBlank()) {
-            throw new McpToolException("fetchErecNoFromDb", "ZohoErecNo missing for employee sid: " + sid);
+            log.info("ZohoErecNo not found in DB for sid {}. Fetching from Zoho API...", sid);
+            erecNo = fetchAndSaveZohoErecNo(sid);
+        }
+        return erecNo;
+    }
+
+    /**
+     * Utility: Get ErecNo from employee object or fetch from Zoho if not present.
+     * Updates employee object and DB if fetched from Zoho.
+     */
+    private String getOrFetchErecNo(Employee emp) {
+        String erecNo = emp.getZohoErecNo();
+        if (erecNo == null || erecNo.isBlank()) {
+            log.info("ZohoErecNo not found in DB for sid {}. Fetching from Zoho API...", emp.getSid());
+            erecNo = fetchAndSaveZohoErecNo(emp.getSid());
+            emp.setZohoErecNo(erecNo);
         }
         return erecNo;
     }
