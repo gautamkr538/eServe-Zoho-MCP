@@ -14,3 +14,33 @@ CREATE TABLE employees (
 CREATE INDEX idx_employee_id ON employees (employee_id);
 CREATE INDEX idx_email ON employees (email);
 CREATE INDEX idx_is_active ON employees (is_active);
+
+
+-- Create the ENUM type (only if it doesn’t exist)
+DO $$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'employee_role') THEN
+            CREATE TYPE employee_role AS ENUM ('USER', 'ADMIN');
+        END IF;
+    END
+$$;
+
+
+ALTER TABLE employees ADD COLUMN role employee_role DEFAULT 'USER' NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_role ON employees (role);
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+ALTER TABLE employees
+    ADD COLUMN sid UUID DEFAULT uuid_generate_v4();
+
+ALTER TABLE employees
+    DROP CONSTRAINT employees_pkey;
+
+ALTER TABLE employees
+    DROP COLUMN id;
+
+ALTER TABLE employees
+    ADD CONSTRAINT employees_pkey PRIMARY KEY (sid);
+
