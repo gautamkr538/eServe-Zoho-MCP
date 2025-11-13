@@ -153,7 +153,7 @@ public class ZohoPayrollMcpTools {
      */
     @Tool(description = """
         Get list of holidays for specified or default location/shift/employee/date-range from Zoho (V2).
-        Provide sid instead of email.
+        Provide user sid to get holiday list.
         """)
     public List<HolidayResponse> getEmployeeHolidays(
             @ToolParam(description = "Location name as per Zoho (default: Bangalore)") String location,
