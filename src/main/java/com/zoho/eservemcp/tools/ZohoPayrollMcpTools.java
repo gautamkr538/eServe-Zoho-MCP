@@ -5,7 +5,9 @@ import com.zoho.eservemcp.dto.response.ZohoBookedAndBalanceReport;
 import com.zoho.eservemcp.dto.response.ZohoHolidaysResponse;
 import com.zoho.eservemcp.dto.response.ZohoLeaveRecordsResponseV2;
 import com.zoho.eservemcp.entity.Employee;
+import com.zoho.eservemcp.exception.DomainValidationException;
 import com.zoho.eservemcp.exception.EmployeeNotFoundException;
+import com.zoho.eservemcp.exception.InputValidationException;
 import com.zoho.eservemcp.exception.McpBaseException;
 import com.zoho.eservemcp.exception.McpToolException;
 import com.zoho.eservemcp.repository.EmployeeRepository;
@@ -221,5 +223,20 @@ public class ZohoPayrollMcpTools {
             log.error("Failed to fetch/save Zoho ErecNo: {}", e.getMessage(), e);
             throw new McpToolException("fetchAndSaveZohoErecNo", "Unexpected error fetching/saving zohoErecNo", e);
         }
+    }
+
+    // Validate email format and domain, fetch active employee or throw
+    private Employee validateAndFetchEmployee(String email) {
+        if (email == null || email.trim().isEmpty()) {
+            throw InputValidationException.emptyField("email");
+        }
+        if (!email.contains("@")) {
+            throw InputValidationException.invalidEmail(email);
+        }
+        if (!email.endsWith("@" + ALLOWED_DOMAIN)) {
+            throw new DomainValidationException(email, ALLOWED_DOMAIN);
+        }
+        return employeeRepository.findByEmailAndIsActive(email, true)
+                .orElseThrow(() -> new EmployeeNotFoundException(email, false));
     }
 }
