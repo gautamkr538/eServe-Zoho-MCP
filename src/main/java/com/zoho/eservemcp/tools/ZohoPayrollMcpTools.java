@@ -153,25 +153,21 @@ public class ZohoPayrollMcpTools {
         Provide user sid to get holiday list.
         """)
     public List<HolidayResponse> getEmployeeHolidays(
-            @ToolParam(description = "Location name as per Zoho (default: Bangalore)") String location,
-            @ToolParam(description = "Shift name as per Zoho; default is General") String shift,
-            @ToolParam(description = "Employee sid (UUID); Required") UUID sid,
-            @ToolParam(description = "True for only upcoming holidays; default is false") Boolean upcoming,
-            @ToolParam(description = "From date (dd-MMM-yyyy or org format); default start date of current year") String from,
-            @ToolParam(description = "To date (dd-MMM-yyyy or org format); default end date of current year") String to,
-            @ToolParam(description = "Date format, e.g. dd-MMM-yyyy") String dateFormat
+            @ToolParam(description = "True for only upcoming holidays; default is false", required = false) Boolean upcoming,
+            @ToolParam(description = "From date (dd-MMM-yyyy or org format); default start date of current year", required = false) String from,
+            @ToolParam(description = "To date (dd-MMM-yyyy or org format); default end date of current year", required = false) String to,
+            @ToolParam(description = "Date format, e.g. dd-MMM-yyyy", required = false) String dateFormat
     ) {
         try {
-            Employee emp = validateAndFetchEmployee(sid);
-            String userErecNo = getOrFetchErecNo(emp);
+//            Employee emp = validateAndFetchEmployee(sid);
+//            String userErecNo = getOrFetchErecNo(emp);
 
-            String resolvedLocation = (location == null || location.isBlank()) ? "Bangalore" : location;
             boolean resolvedUpcoming = (upcoming == null) ? false : upcoming;
 
-            ZohoHolidaysResponse response = zohoApiService.fetchHolidays(resolvedLocation, shift, userErecNo, resolvedUpcoming, from, to, dateFormat);
+            ZohoHolidaysResponse response = zohoApiService.fetchHolidays(resolvedUpcoming, from, to, dateFormat);
 
-            if (response == null || response.getData() == null || response.getData().isEmpty())
-                throw new McpToolException("getEmployeeHolidays", "No holidays found for given query.");
+//            ZohoHolidaysResponse response = zohoApiService.fetchHolidays();
+
             return responseMapper.mapToHolidayResponses(response.getData());
         } catch (Exception e) {
             log.error("Error in getEmployeeHolidays", e);

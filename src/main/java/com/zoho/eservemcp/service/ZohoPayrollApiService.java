@@ -129,15 +129,18 @@ public class ZohoPayrollApiService {
     /**
      * Fetch holidays from Zoho API
      */
-    public ZohoHolidaysResponse fetchHolidays(String location, String shift, String employee, boolean upcoming, String from, String to, String dateFormat) {
+    public ZohoHolidaysResponse fetchHolidays(boolean isUpcoming, String fromDate, String toDate, String dateFormat) {
 
-        String url = String.format("%s/leave/v2/holidays/get?location=%s&shift=%s&employee=%s&upcoming=%s&from=%s&to=%s&dateFormat=%s",
-                baseUrl, location, shift, employee, upcoming, from, to, dateFormat);
+        StringBuilder url = new StringBuilder(baseUrl + "/leave/v2/holidays/get?");
+
+        url.append("upcoming=").append(isUpcoming);
+        if (fromDate != null && !fromDate.trim().isEmpty()) {url.append("&from=").append(fromDate);}
+        if (toDate != null && !toDate.trim().isEmpty()) {url.append("&to=").append(toDate);}
+        if (dateFormat != null && !dateFormat.trim().isEmpty()) {url.append("&dateFormat=").append(dateFormat);}
 
         HttpHeaders headers = createHeaders();
         try {
-            ResponseEntity<ZohoHolidaysResponse> response = restTemplate.exchange(
-                    url, HttpMethod.GET, new HttpEntity<>(headers), ZohoHolidaysResponse.class);
+            ResponseEntity<ZohoHolidaysResponse> response = restTemplate.exchange(url.toString(), HttpMethod.GET, new HttpEntity<>(headers), ZohoHolidaysResponse.class);
             ZohoHolidaysResponse body = response.getBody();
             if (body == null || body.getData() == null || body.getStatus() != 1) {
                 throw new ZohoApiException("Holidays API failure or empty result");

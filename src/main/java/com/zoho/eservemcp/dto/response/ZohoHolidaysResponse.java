@@ -22,16 +22,38 @@ public class ZohoHolidaysResponse {
     @AllArgsConstructor
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Holiday {
-        private Boolean isRestrictedHoliday;
-        private String ShiftName;
-        private String Remarks;
-        private String LocationId;
-        private String ShiftId;
-        private String Id;
-        private String Date; // or LocalDate if you add parsing
-        private Boolean isHalfday;
-        private String Name;
-        private String LocationName;
-        private int Session;
+
+        @JsonProperty("isRestrictedHoliday")
+        private Boolean restrictedHoliday;
+
+        @JsonProperty("isHalfday")
+        private Boolean halfday;
+
+        @JsonProperty("ShiftName")
+        private String shiftName;
+
+        @JsonProperty("Remarks")
+        private String remarks;
+
+        @JsonProperty("LocationId")
+        private String locationId;
+
+        @JsonProperty("ShiftId")
+        private String shiftId;
+
+        @JsonProperty("Id")
+        private String id;
+
+        @JsonProperty("Date")
+        private String date;
+
+        @JsonProperty("Name")
+        private String name;
+
+        @JsonProperty("LocationName")
+        private String locationName;
+
+        @JsonProperty("Session")
+        private Integer session;
     }
 }

@@ -23,8 +23,8 @@ public class PayrollResponseMapper {
                 .remarks(z.getRemarks())
                 .locationName(z.getLocationName())
                 .shiftName(z.getShiftName())
-                .isRestrictedHoliday(Boolean.TRUE.equals(z.getIsRestrictedHoliday()))
-                .isHalfday(Boolean.TRUE.equals(z.getIsHalfday()))
+                .isRestrictedHoliday(Boolean.TRUE.equals(z.getRestrictedHoliday()))
+                .isHalfday(Boolean.TRUE.equals(z.getHalfday()))
                 .session(Optional.of(z.getSession()).orElse(0))
                 .build()
         ).collect(Collectors.toList());
