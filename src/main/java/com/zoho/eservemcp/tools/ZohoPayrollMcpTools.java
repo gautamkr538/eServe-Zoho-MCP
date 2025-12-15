@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -146,7 +147,7 @@ public class ZohoPayrollMcpTools {
     }
 
     /**
-     * Fetch holidays (sid-based).
+     * Fetch holidays.
      */
     @Tool(description = """
         Get list of holidays for specified or default location/shift/employee/date-range from Zoho (V2).
@@ -159,15 +160,8 @@ public class ZohoPayrollMcpTools {
             @ToolParam(description = "Date format, e.g. dd-MMM-yyyy", required = false) String dateFormat
     ) {
         try {
-//            Employee emp = validateAndFetchEmployee(sid);
-//            String userErecNo = getOrFetchErecNo(emp);
-
             boolean resolvedUpcoming = (upcoming == null) ? false : upcoming;
-
             ZohoHolidaysResponse response = zohoApiService.fetchHolidays(resolvedUpcoming, from, to, dateFormat);
-
-//            ZohoHolidaysResponse response = zohoApiService.fetchHolidays();
-
             return responseMapper.mapToHolidayResponses(response.getData());
         } catch (Exception e) {
             log.error("Error in getEmployeeHolidays", e);
@@ -177,33 +171,35 @@ public class ZohoPayrollMcpTools {
 
     /**
      * Fetch and return employee ZohoErecNo (employeeId) by sid (UUID).
-     * If not present in DB, fetch from Zoho Mail API using employee's email, update DB, and return it.
+     * If not present in DB, fetch from Zoho Mail API using employee's email,
+     * update DB, and return it.
      */
     @Tool(description = "Fetch employee ZohoErecNo (employeeId) by sid (UUID). If not in DB, it fetches from Zoho and updates the record.")
-    public String fetchAndSaveZohoErecNo(@ToolParam(description = "Employee sid (UUID); Required") UUID sid) {
+    public Map<String, String> fetchAndSaveZohoErecNo(@ToolParam(description = "Employee sid (UUID); Required") UUID sid) {
+        Map<String, String> response = new HashMap<>();
         try {
             Employee emp = employeeRepository.findBySid(sid)
                     .filter(Employee::getIsActive)
                     .orElseThrow(() -> new EmployeeNotFoundException("Employee not found for sid: " + sid, false));
-            // Check if ZohoErecNo already present
+
+            // If already present, return as STRING
             if (emp.getZohoErecNo() != null && !emp.getZohoErecNo().isBlank()) {
-                log.info("ZohoErecNo already present for sid {}: {}", sid, emp.getZohoErecNo());
-                return emp.getZohoErecNo();
+                response.put("zohoErecNo", emp.getZohoErecNo());
+                return response;
             }
             String email = emp.getEmail();
             if (email == null || email.isBlank()) {
                 throw new McpToolException("fetchAndSaveZohoErecNo", "Employee email not found for sid: " + sid);
             }
-            // Fetch erecNo from Zoho Mail API
-            String erecNo = zohoApiService.fetchZohoMailZuidByEmail(email);
+            String erecNo = zohoApiService.fetchZohoIdByEmail(email);
             if (erecNo == null || erecNo.isBlank()) {
                 throw new McpToolException("fetchAndSaveZohoErecNo", "Zoho Employee ErecNo not found for email: " + email);
             }
-            // Update employee record with fetched erecNo
             emp.setZohoErecNo(erecNo);
             employeeRepository.save(emp);
             log.info("Fetched and updated ZohoErecNo for sid {}: {}", sid, erecNo);
-            return erecNo;
+            response.put("zohoErecNo", erecNo);
+            return response;
         } catch (McpBaseException e) {
             throw e;
         } catch (Exception e) {
@@ -221,7 +217,8 @@ public class ZohoPayrollMcpTools {
         String erecNo = emp.getZohoErecNo();
         if (erecNo == null || erecNo.isBlank()) {
             log.info("ZohoErecNo not found in DB for sid {}. Fetching from Zoho API...", sid);
-            erecNo = fetchAndSaveZohoErecNo(sid);
+            Map<String, String> result = fetchAndSaveZohoErecNo(sid);
+            erecNo = result != null ? result.get("zohoErecNo") : null;
         }
         return erecNo;
     }
@@ -234,7 +231,8 @@ public class ZohoPayrollMcpTools {
         String erecNo = emp.getZohoErecNo();
         if (erecNo == null || erecNo.isBlank()) {
             log.info("ZohoErecNo not found in DB for sid {}. Fetching from Zoho API...", emp.getSid());
-            erecNo = fetchAndSaveZohoErecNo(emp.getSid());
+            Map<String, String> result = fetchAndSaveZohoErecNo(emp.getSid());
+            erecNo = result != null ? result.get("zohoErecNo") : null;
             emp.setZohoErecNo(erecNo);
         }
         return erecNo;

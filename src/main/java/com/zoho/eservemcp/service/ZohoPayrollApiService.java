@@ -19,7 +19,9 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.time.format.DateTimeFormatter;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class ZohoPayrollApiService {
@@ -29,9 +31,6 @@ public class ZohoPayrollApiService {
 
     @Value("${zoho.people.api.base-url}")
     private String baseUrl;
-
-    @Value("${zoho.mail.api.base-url}")
-    private String emailBaseUrl;
 
     @Value("${zoho.mail.organization-id}")
     private String zoid;
@@ -153,21 +152,24 @@ public class ZohoPayrollApiService {
     }
 
     /**
-     * Lookup Zoho employeeId (erecNo) by email.
+     * Lookup Zoho employee Zoho_ID by email.
      */
-    public String fetchZohoMailZuidByEmail(String email) {
-        String url = String.format("%s/organization/%s/accounts/%s", emailBaseUrl, zoid, email);
-        HttpHeaders headers = createHeaders();
-        try {
-            ResponseEntity<JsonNode> resp = restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
-            JsonNode data = resp.getBody().path("data");
-            if (!data.isMissingNode()) {
-                return data.path("zuid").asText();
-            }
-            return null;
-        } catch (Exception e) {
-            log.error("Failed Zoho Mail API zuid lookup for email {}: {}", email, e.getMessage(), e);
-            throw new ZohoApiException("Error looking up zuid for user: " + email, e);
+    public String fetchZohoIdByEmail(String email){
+        String url=String.format("%s/forms/P_Employee/getRecords?searchColumn=EMPLOYEEMAILALIAS&searchValue=%s",baseUrl,email);
+        HttpHeaders headers=createHeaders();
+        try{
+            ResponseEntity<JsonNode> response=restTemplate.exchange(url, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
+            JsonNode result=response.getBody().path("response").path("result");
+            if(!result.isArray()||result.isEmpty()) return null;
+            JsonNode obj=result.get(0);
+            Iterator<Map.Entry<String,JsonNode>> it=obj.fields();
+            if(!it.hasNext()) return null;
+            JsonNode empArr=it.next().getValue();
+            if(!empArr.isArray()||empArr.isEmpty()) return null;
+            return empArr.get(0).path("Zoho_ID").asText(null);
+        }catch(Exception e){
+            log.error("Zoho Zoho_ID lookup failed for email {}: {}",email,e.getMessage(),e);
+            throw new ZohoApiException("Error looking up Zoho_ID for user: "+email,e);
         }
     }
 }

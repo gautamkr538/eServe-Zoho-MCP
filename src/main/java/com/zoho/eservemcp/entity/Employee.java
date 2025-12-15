@@ -26,7 +26,7 @@ public class Employee {
     private String employeeId;
 
     @Column(name = "email", unique = true, nullable = false)
-    @Pattern(regexp = "^[A-Za-z0-9._%+-]+@eservecloud\\.in$", message = "Email must be from @eservecloud.in domain")
+//    @Pattern(regexp = "^[A-Za-z0-9._%+-]+@eservecloud\\.in$", message = "Email must be from @eservecloud.in domain")
     private String email;
 
     @Column(name = "zoho_erec_no", unique = true, nullable = false)
