@@ -84,7 +84,7 @@ public class ZohoPayrollApiService {
     /**
      * Fetch Booked & Balance report from Zoho API (leaveTypeIds now omitted).
      */
-    public ZohoBookedAndBalanceReport fetchBookedAndBalance(
+    public ZohoBookedAndBalanceReport fetchLeaveBookedAndBalance(
             String from, String to, String unit, List<String> employeeIds) {
         var uri = UriComponentsBuilder.fromUriString(baseUrl + "/v2/leavetracker/reports/bookedAndBalance")
                 .queryParam("from", from)
@@ -100,28 +100,6 @@ public class ZohoPayrollApiService {
         } catch (Exception e) {
             log.error("Error fetching booked and balance report", e);
             throw new ZohoApiException("Fetch booked and balance failed", e);
-        }
-    }
-
-    /**
-     * Download payslip PDF for an employee for a specific pay period.
-     */
-    public byte[] downloadPayslip(String userErecNo, String payPeriodId) {
-        log.info("Downloading payslip for user: {} period: {}", userErecNo, payPeriodId);
-        String url = String.format("%s/timesheet/downloadPayslip?userErecNo=%s&payPeriodId=%s", baseUrl, userErecNo, payPeriodId);
-        HttpHeaders headers = createHeaders();
-        try {
-            ResponseEntity<byte[]> response = restTemplate.exchange(
-                    url, HttpMethod.GET, new HttpEntity<>(headers), byte[].class);
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                return response.getBody();
-            } else {
-                log.error("Payslip download failed, response code: {}", response.getStatusCode());
-                throw new ZohoApiException("Payslip download failed: HTTP " + response.getStatusCode());
-            }
-        } catch (Exception e) {
-            log.error("Exception downloading payslip: {}", e.getMessage(), e);
-            throw new ZohoApiException("Exception downloading payslip", e);
         }
     }
 
@@ -170,6 +148,33 @@ public class ZohoPayrollApiService {
         }catch(Exception e){
             log.error("Zoho Zoho_ID lookup failed for email {}: {}",email,e.getMessage(),e);
             throw new ZohoApiException("Error looking up Zoho_ID for user: "+email,e);
+        }
+    }
+
+    /**
+     * Fetch User Leave Report for a single employee (Zoho V2).
+     *
+     * @param erecNo Zoho Employee ErecNo (required)
+     * @param to     Optional report end date (dd-MMM-yyyy or org format)
+     */
+    public JsonNode fetchUserLeaveReport(String erecNo, String to) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromUriString(baseUrl + "/v2/leavetracker/reports/user")
+                .queryParam("employee", erecNo);
+        // add `to` ONLY if present
+        if (to != null && !to.isBlank()) {
+            builder.queryParam("to", to);
+        }
+        HttpHeaders headers = createHeaders();
+        try {
+            ResponseEntity<JsonNode> resp = restTemplate.exchange(builder.build(true).toUri(),
+                    HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
+            if (resp.getStatusCode() != HttpStatus.OK || resp.getBody() == null) {
+                throw new ZohoApiException("Empty or invalid user leave report response");
+            }
+            return resp.getBody();
+        } catch (Exception e) {
+            log.error("Error fetching user leave report for erecNo {}", erecNo, e);
+            throw new ZohoApiException("Fetch user leave report failed", e);
         }
     }
 }

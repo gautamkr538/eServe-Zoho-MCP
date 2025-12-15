@@ -1,5 +1,6 @@
 package com.zoho.eservemcp.tools;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.zoho.eservemcp.dto.response.HolidayResponse;
 import com.zoho.eservemcp.dto.response.ZohoBookedAndBalanceReport;
 import com.zoho.eservemcp.dto.response.ZohoHolidaysResponse;
@@ -19,10 +20,6 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,43 +42,6 @@ public class ZohoPayrollMcpTools {
         this.zohoApiService = zohoApiService;
         this.employeeRepository = employeeRepository;
         this.responseMapper = responseMapper;
-    }
-
-    /**
-     * Download employee payslip as PDF using sid (UUID).
-     */
-    @Tool(description = "Download payslip PDF for an employee using sid (UUID) and pay period ID from Zoho.")
-    public String downloadPayslipAsPdfAndReturnPath(
-            @ToolParam(description = "Employee sid (UUID); Required") UUID sid,
-            @ToolParam(description = "Pay period ID from Zoho; Optional") String payPeriodId) {
-        try {
-            Employee emp = validateAndFetchEmployee(sid);
-            String userErecNo = getOrFetchErecNo(emp);
-
-            if (payPeriodId == null || payPeriodId.trim().isEmpty()) {
-                throw new McpToolException("downloadPayslipAsPdfAndReturnPath", "PayPeriodId cannot be empty");
-            }
-
-            byte[] pdfBytes = zohoApiService.downloadPayslip(userErecNo, payPeriodId);
-            if (pdfBytes == null || pdfBytes.length == 0) {
-                throw new McpToolException("downloadPayslipAsPdfAndReturnPath", "No PDF downloaded from Zoho.");
-            }
-
-            String fileName = "payslip_" + emp.getEmployeeId() + "_" + payPeriodId + ".pdf";
-            Path path = Paths.get("/tmp/" + fileName);
-            Files.write(path, pdfBytes);
-            return path.toString();
-
-        } catch (McpBaseException ex) {
-            log.error("Payslip PDF error: {}", ex.getMessage());
-            throw ex;
-        } catch (IOException ex) {
-            log.error("Failed to write PDF to disk: {}", ex.getMessage(), ex);
-            throw new McpToolException("downloadPayslipAsPdfAndReturnPath", "Failed to write PDF file to disk", ex);
-        } catch (Exception ex) {
-            log.error("Unexpected error during payslip PDF download: {}", ex.getMessage(), ex);
-            throw new McpToolException("downloadPayslipAsPdfAndReturnPath", "Error downloading payslip", ex);
-        }
     }
 
     /**
@@ -136,7 +96,7 @@ public class ZohoPayrollMcpTools {
                     .map(this::fetchErecNoFromDb)
                     .toList();
 
-            ZohoBookedAndBalanceReport report = zohoApiService.fetchBookedAndBalance(from, to, unit, erecnoList);
+            ZohoBookedAndBalanceReport report = zohoApiService.fetchLeaveBookedAndBalance(from, to, unit, erecnoList);
             if (report == null || report.report() == null || report.report().isEmpty())
                 throw new McpToolException("getBookedAndBalanceReport", "No booked/balance data found.");
             return report;
@@ -208,6 +168,39 @@ public class ZohoPayrollMcpTools {
         }
     }
 
+    @Tool(description = "Fetch user leave summary (taken, available, type, leave name).")
+    public Map<String, Object> getUserLeaveSummary(@ToolParam(description = "Employee sid; Required") UUID employeeSid,
+            @ToolParam(description = "Report end date (dd-MMM-yyyy); Optional", required = false) String to
+    ) {
+        try {
+            String erecNo = fetchErecNoFromDb(employeeSid);
+            if(erecNo == null || erecNo.isBlank()) {
+                throw new McpToolException("getUserLeaveSummary", "Zoho ErecNo not found for employee sid: " + employeeSid);
+            }
+            JsonNode raw = zohoApiService.fetchUserLeaveReport(erecNo, to);
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("employeeName", raw.path("employeeName").asText());
+
+            List<Map<String, Object>> leaves = new java.util.ArrayList<>();
+
+            for (JsonNode lt : raw.path("leavetypes")) {
+                Map<String, Object> item = new HashMap<>();
+                item.put("leaveType", lt.path("leavetypeName").asText());
+                item.put("taken", lt.path("taken").asInt());
+                item.put("available", lt.path("available").asInt());
+                item.put("type", lt.path("type").asText());
+                leaves.add(item);
+            }
+
+            result.put("leaves", leaves);
+            log.info("Fetched user leave summary for sid {}: {}", employeeSid, result);
+            return result;
+        } catch (Exception e) {
+                throw new McpToolException("getUserLeaveSummary", "Error fetching user leave summary", e);
+        }
+    }
+
     /**
      * Utility: Fetch Employee ErecNo from DB using sid.
      * If not present in DB, automatically fetches from Zoho API and updates DB.
@@ -219,21 +212,6 @@ public class ZohoPayrollMcpTools {
             log.info("ZohoErecNo not found in DB for sid {}. Fetching from Zoho API...", sid);
             Map<String, String> result = fetchAndSaveZohoErecNo(sid);
             erecNo = result != null ? result.get("zohoErecNo") : null;
-        }
-        return erecNo;
-    }
-
-    /**
-     * Utility: Get ErecNo from employee object or fetch from Zoho if not present.
-     * Updates employee object and DB if fetched from Zoho.
-     */
-    private String getOrFetchErecNo(Employee emp) {
-        String erecNo = emp.getZohoErecNo();
-        if (erecNo == null || erecNo.isBlank()) {
-            log.info("ZohoErecNo not found in DB for sid {}. Fetching from Zoho API...", emp.getSid());
-            Map<String, String> result = fetchAndSaveZohoErecNo(emp.getSid());
-            erecNo = result != null ? result.get("zohoErecNo") : null;
-            emp.setZohoErecNo(erecNo);
         }
         return erecNo;
     }
